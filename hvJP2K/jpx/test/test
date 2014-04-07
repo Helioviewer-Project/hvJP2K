@@ -1,0 +1,34 @@
+#! /bin/sh
+
+function file_size {
+	echo $(wc -c "$1" | awk '{ print $1 }')
+}
+
+function do_test {
+	mkdir -p $1-test
+	cd $1-test
+
+    IN=$(echo ../"$1"-ref/*.jp2 | tr ' ' ,)
+	/swhv/python/bin/hv_jpx_split -i ../$1.jpx
+	/swhv/python/bin/hv_jpx_merge -i *.jp2 -o $1-hv.jpx
+	/swhv/python/bin/hv_jpx_merge -i $IN -o $1-hv-links.jpx -links
+
+	for i in *; do
+		TST=$i
+		STST=$(file_size $TST)
+
+		REF=../$1-ref/$i
+		SREF=$(file_size $REF)
+
+		CMP=$(cmp -s "$TST" "$REF")
+		RES=fail
+		if [ $STST == $SREF ] && [ $? -eq 0 ]; then RES=pass; fi
+		echo $RES: $i
+	done
+
+	cd ..
+}
+
+do_test aia
+do_test swap
+do_test hetero

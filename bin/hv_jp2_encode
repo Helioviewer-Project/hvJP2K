@@ -1,0 +1,130 @@
+#!/usr/bin/env python
+
+import os, argparse
+# to be configured
+os.environ['XDG_CONFIG_HOME'] = '/swhv/python/etc'
+
+import numpy as np
+from lxml import etree as et
+from astropy.io import fits
+from glymur import Jp2k
+
+from hv_write_jp2 import hv_write_openjp2
+
+def header2xml(header):
+    root = et.Element('fits')
+
+    for card in header.cards:
+        if card.keyword in ('', 'COMMENT', 'HISTORY'):
+            continue
+
+        value = card.value
+        if isinstance(value, str):
+            value = value.strip("'")
+        elif isinstance(value, bool):
+            value = {True:'T', False:'F'}[value]
+        else:
+            value = repr(value)
+            if value.endswith('.0'):
+                value = value.rstrip('0').rstrip('.')
+
+        et.SubElement(root, card.keyword).text = value
+
+    return root
+
+def hv2xml(tree):
+    root = et.Element('helioviewer')
+    if tree is not None:
+        root.append(tree)
+
+    return root
+
+def fits2xml(header):
+    meta = et.Element('meta')
+    meta.append(header2xml(header))
+    meta.append(hv2xml(None))
+    return meta
+
+def xfer_sgamma(img):
+    img[:,:] = np.where(img > 0.0031308, 1.055 * np.power(img, .416666666666667) - 0.055, 12.92 * img)
+
+def xfer_gamma(img):
+    np.power(img, .416666666666667, out=img)
+
+def xfer_log(img):
+    np.log1p(img, out=img)
+    img *= 1.442695040888963 # 1/log(2)
+
+def xfer_linear(img):
+    pass
+
+xfer = {'sgamma':xfer_sgamma, 'gamma':xfer_gamma, 'log':xfer_log, 'linear':xfer_linear}
+bpps = (8, 12, 16)
+
+parser = argparse.ArgumentParser(description='Encode FITS to HV JP2.')
+parser.add_argument('-i', metavar='fits', help='input FITS filename', required=True)
+parser.add_argument('-plane', metavar='<data cube plane number>', type=int, nargs='?', default=0, const=0)
+parser.add_argument('-hdu', metavar='<FITS HDU index to process>', type=int, nargs='?', default=-1, const=-1)
+parser.add_argument('-layers', metavar='<quality layers number>', type=int, nargs='?', default=4, const=4)
+parser.add_argument('-cratio', metavar='<compression ratio>', type=float, nargs='?', default=6, const=6)
+parser.add_argument('-bpp', metavar='<bits per pixel>', choices=bpps, type=int, nargs='?', default=8, const=8)
+parser.add_argument('-f', '--function', choices=xfer.keys(), help='pixel transfer function', nargs='?', default='sgamma', const='sgamma')
+parser.add_argument('-v', '--verbose', help='verbose operation', action='store_true')
+args = parser.parse_args()
+
+args.layers = np.clip(args.layers, 1, 16)
+args.cratio = np.clip(args.cratio, 1, 128)
+
+cratios = []
+for i in xrange(args.layers):
+    cratios.append(args.cratio * 2**i)
+cratios.reverse()
+
+def data_process(hdu):
+    hdu.header['DATE_OBS'] = hdu.header['DATE-OBS']
+    xml = fits2xml(hdu.header)
+
+    img = hdu.data
+    if len(img.shape) > 2:
+        img = img[np.clip(args.plane, 0, img.shape[0] - 1),]
+    img = img.astype(np.float32)
+
+    img[img < 0] = 0
+
+    p = np.percentile(img, (0.05, 99.95))
+    if p[1] - p[0] < 1e-5:
+        img.fill(0)
+    else:
+        np.clip(img, p[0], p[1], out=img)
+        r = 1. / (p[1] - p[0])
+        img = (img - p[0]) * r
+        xfer[args.function](img)
+
+    np.rint(((1 << args.bpp) - 1) * img, out=img)
+    img = np.flipud(img.astype(np.uint16))
+
+    #hdu.data = img
+    #hdu.writeto('bla.fits', output_verify='silentfix' if args.verbose==False else 'fix', checksum=True, clobber=True)
+
+    name = os.path.splitext(args.i)[0] + '.jp2'
+    hv_write_openjp2(name, img, args.bpp, xml, prog='RPCL', cratios=cratios, numres=6, irreversible=True)
+
+    #jp2 = Jp2k('bla.jp2', mode='wb')
+    #jp2.write(img, verbose=args.verbose, prog='RPCL', cratios=cratios, numres=6)
+    #jp2.append(jp2box.XMLBox(xml))
+
+def process_hdu(hdu):
+    hdu.verify('silentfix' if args.verbose==False else 'fix')
+    if isinstance(hdu, (fits.PrimaryHDU, fits.ImageHDU, fits.CompImageHDU)) and hdu.data is not None:
+        data_process(hdu)
+        return True
+    else:
+        return False
+
+with fits.open(args.i, memmap=True) as hdus:
+    if args.hdu <= -1:
+        for hdu in hdus:
+            if process_hdu(hdu):
+                break
+    else:
+        process_hdu(hdus[args.hdu])
