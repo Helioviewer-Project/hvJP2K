@@ -6,11 +6,12 @@ kwargs = {'name': 'hvJP2K',
           'author': 'SWHV OMA',
           'author_email': 'swhv@oma.be',
           'url': 'https://github.com/helioviewer/...',
-          'packages': ['hvJP2K', 'hvJP2K.jp2', 'hvJP2K.jpx', 'hvJP2K.jp2.test', 'hvJP2K.jpx.test'],
-          'scripts': ['bin/hv_jp2_decode', 'bin/hv_jp2_encode', 'bin/hv_jpx_merge', 'bin/hv_jpx_split'],
+          'packages': ['hvJP2K', 'hvJP2K.jp2', 'hvJP2K.jp2.data', 'hvJP2K.jpx'],
+          'package_data': {'hvJP2K.jp2': ['data/*.sch', 'test/*.jp2', 'test/*.ppm'], 'hvJP2K.jpx': ['test/*/*.jp2', 'test/*/*.jpx']},
+          'scripts': ['bin/hv_jp2_decode', 'bin/hv_jp2_encode', 'bin/hv_jp2_verify', 'bin/hv_jpx_merge', 'bin/hv_jpx_split'],
           'license': 'MIT'}
 
-instllrqrs = ['glymur>=0.5.10']
+instllrqrs = ['numpy', 'lxml>=2.3', 'pillow', 'glymur>=0.5.10']
 kwargs['install_requires'] = instllrqrs
 
 clssfrs = ["Programming Language :: Python",

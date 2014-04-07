@@ -1,0 +1,25 @@
+#!/usr/bin/env python
+
+import argparse
+from jpylyzer.jpylyzer import checkOneFile
+from jpylyzer import config
+
+import xml.etree.cElementTree as cet
+from lxml import etree as let
+from lxml import isoschematron as iso
+
+from hvJP2K.jp2.data import *
+
+parser = argparse.ArgumentParser(description='Verify JP2 files for Helioviewer conformance.')
+parser.add_argument('-i', metavar='jp2file', help='input JP2 filename', required=True)
+parser.add_argument('-v', '--verbose', help='verbose operation', action='store_true')
+args = parser.parse_args()
+
+config.outputVerboseFlag = args.verbose
+config.extractNullTerminatedXMLFlag = True
+
+xmlTree = let.fromstring(cet.tostring(checkOneFile(args.i)))
+# print(let.tostring(xmlTree))
+
+schema = iso.Schematron(let.parse(hv_schematron()))
+schema.assertValid(xmlTree)
