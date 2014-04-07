@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 
-import os, re, sys, argparse
-# to be configured
-os.environ['XDG_CONFIG_HOME'] = '/swhv/python/etc'
+import re, argparse
 
 import numpy as np
 from glymur import Jp2k
 from glymur.lib import openjp2 as opj2
 from lxml import etree as et
 from PIL import Image
+
+from hvJP2K.jp2.jp2_common import first_box
 
 if opj2.OPENJP2 is None:
     raise RuntimeError('You must have at least version 2 of OpenJPEG before using this program.')
@@ -25,9 +25,9 @@ args = parser.parse_args()
 
 jp2 = Jp2k(args.i)
 
-xml_ = [b for b in jp2.box if b.box_id == b'xml ']
+xml_ = first_box(jp2, b'xml ')
 if args.xml and xml_ is not None:
-    print(et.tostring(xml_[0].xml))
+    print(et.tostring(xml_.xml))
 
 code = jp2.get_codestream()
 xsiz = code.segment[1].xsiz

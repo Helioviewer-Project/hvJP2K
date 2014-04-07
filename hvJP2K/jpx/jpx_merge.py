@@ -3,6 +3,7 @@ import warnings
 from glymur import Jp2k
 from glymur.jp2box import *
 
+from ..jp2.jp2_common import first_box
 from jpx_common import *
 
 def jpx_merge(names_in, name_out, links):

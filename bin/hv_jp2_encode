@@ -9,7 +9,7 @@ from lxml import etree as et
 from astropy.io import fits
 from glymur import Jp2k
 
-from hv_write_jp2 import hv_write_openjp2
+from hvJP2K.jp2.jp2_write import hv_write_openjp2
 
 def header2xml(header):
     root = et.Element('fits')
