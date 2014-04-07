@@ -1,17 +1,7 @@
 #!/usr/bin/env python
 
 import re, argparse
-
-import numpy as np
-from glymur import Jp2k
-from glymur.lib import openjp2 as opj2
-from lxml import etree as et
-from PIL import Image
-
-from hvJP2K.jp2.jp2_common import first_box
-
-if opj2.OPENJP2 is None:
-    raise RuntimeError('You must have at least version 2 of OpenJPEG before using this program.')
+from hvJP2K.jp2.jp2_decode import jp2_decode
 
 parser = argparse.ArgumentParser(description='Decode JP2 files.')
 parser.add_argument('-i', metavar='jp2file', help='input JP2 filename', required=True)
@@ -23,16 +13,6 @@ parser.add_argument('-xml', help='print to terminal the XML metadata', action='s
 parser.add_argument('-v', '--verbose', help='verbose operation', action='store_true')
 args = parser.parse_args()
 
-jp2 = Jp2k(args.i)
-
-xml_ = first_box(jp2, b'xml ')
-if args.xml and xml_ is not None:
-    print(et.tostring(xml_.xml))
-
-code = jp2.get_codestream()
-xsiz = code.segment[1].xsiz
-ysiz = code.segment[1].ysiz
-
 area = None
 if args.region is not None:
     area = [float(n) for n in re.split('\{|,|\}', args.region) if n != '']
@@ -42,17 +22,6 @@ if args.region is not None:
         # to (top left, bottom right)
         area[2] += area[0]
         area[3] += area[1]
-        area = [np.clip(n, 0, 1) for n in area]
-        # to pixels
-        area[0] *= ysiz
-        area[1] *= xsiz
-        area[2] *= ysiz
-        area[3] *= xsiz
-        area = [int(n + .5) for n in area]
 
-rlevel = np.clip(args.reduce, 0, code.segment[2].spcod[4])
-
-# exception for zero size image
-data = jp2.read(verbose=args.verbose, rlevel=rlevel, area=area, ignore_pclr_cmap_cdef=args.codestream_components)
-im = Image.fromarray(data)
-im.save(args.o)
+jp2_decode(args.i, args.o, xml=args.xml, rlevel=args.reduce, area=area,
+           ignore_pclr_cmap_cdef=args.codestream_components, verbose=args.verbose)

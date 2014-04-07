@@ -1,4 +1,3 @@
 
 import os
-# to be configured
-os.environ['XDG_CONFIG_HOME'] = '/swhv/python/etc'
+os.environ['XDG_CONFIG_HOME'] = '${SIDC_INSTALL_PYTHON}/etc'
