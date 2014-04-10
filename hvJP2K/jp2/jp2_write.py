@@ -24,13 +24,16 @@ def hv_write_openjp2(name, img, bpp, xml, **kwargs):
     head = StringIO()
 
     nrows, ncols = img.shape
-    jp2h = jp2box.JP2HeaderBox(
-                    box=(jp2box.ImageHeaderBox(height=nrows, width=ncols, bits_per_component=bpp),
-                         jp2box.ColourSpecificationBox(colorspace=GREYSCALE)))
-    boxes = (jp2box.JPEG2000SignatureBox(), jp2box.FileTypeBox(), jp2h, jp2box.XMLBox(xml))
+    boxes = (jp2box.JPEG2000SignatureBox(),
+             jp2box.FileTypeBox(),
+             jp2box.JP2HeaderBox(
+                box=(jp2box.ImageHeaderBox(height=nrows, width=ncols,
+                                           bits_per_component=bpp),
+                     jp2box.ColourSpecificationBox(colorspace=GREYSCALE))),
+             jp2box.XMLBox(xml))
 
-    for b in boxes:
-        b.write(head)
+    for box in boxes:
+        box.write(head)
     pos = head.tell()
 
     __write_openjp2(img, name, pos + 8, comp_prec=bpp, **kwargs)

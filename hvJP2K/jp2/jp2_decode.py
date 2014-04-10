@@ -12,7 +12,9 @@ if opj2.OPENJP2 is None:
     raise RuntimeError('You must have at least version 2 of OpenJPEG before using this program.')
 
 
-def jp2_decode(name_in, name_out, xml=False, rlevel=0, area=None, ignore_pclr_cmap_cdef=False, verbose=False):
+def jp2_decode(name_in, name_out, xml=False, rlevel=0, area=None,
+               ignore_pclr_cmap_cdef=False, verbose=False):
+
     jp2 = Jp2k(name_in)
 
     xml_ = first_box(jp2, b'xml ')
@@ -35,5 +37,6 @@ def jp2_decode(name_in, name_out, xml=False, rlevel=0, area=None, ignore_pclr_cm
     rlevel = np.clip(rlevel, 0, code.segment[2].spcod[4])
 
     # exception for zero size image
-    data = jp2.read(verbose=verbose, rlevel=rlevel, area=area, ignore_pclr_cmap_cdef=ignore_pclr_cmap_cdef)
+    data = jp2.read(verbose=verbose, rlevel=rlevel, area=area,
+                    ignore_pclr_cmap_cdef=ignore_pclr_cmap_cdef)
     Image.fromarray(data).save(name_out)
