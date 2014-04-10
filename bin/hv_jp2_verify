@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
 import argparse
-from jpylyzer import jpylyzer, config
 
 import xml.etree.cElementTree as cet
 from lxml import etree as let
 from lxml import isoschematron as iso
+from jpylyzer import jpylyzer, config
 
 from hvJP2K.jp2.data import *
 

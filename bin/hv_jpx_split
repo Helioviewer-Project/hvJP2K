@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 import argparse
+
 from hvJP2K.jpx.jpx_split import jpx_split
+
 
 parser = argparse.ArgumentParser(description='Extract JP2 files out of JPX files.')
 parser.add_argument('-i', metavar='jpxfile', help='input JPX filename', required=True)

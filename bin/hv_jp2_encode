@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
-import os, argparse
-# to be configured
-os.environ['XDG_CONFIG_HOME'] = '/swhv/python/etc'
+import os
+import argparse
 
 import numpy as np
 from lxml import etree as et

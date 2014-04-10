@@ -1,19 +1,22 @@
 
+import os
+import struct
 import warnings
-from glymur import Jp2k
-from glymur.jp2box import *
 
-from ..jp2.jp2_common import first_box
-from jpx_common import *
+from glymur import Jp2k, jp2box
+
+from ..jp2.jp2_common import first_box, copy_codestream
+import jpx_common
+
 
 def jpx_merge(names_in, name_out, links):
-    asoc = AssociationBox()
-    ftbl = FragmentTableBox()
-    dtbl = DataReferenceBox()
+    asoc = jp2box.AssociationBox()
+    ftbl = jp2box.FragmentTableBox()
+    dtbl = jp2box.DataReferenceBox()
 
     with open(name_out, 'wb') as ofile:
-        JPEG2000SignatureBox().write(ofile)
-        FileTypeBox(brand='jpx ', compatibility_list=('jpx ', 'jp2 ', 'jpxb')).write(ofile)
+        jp2box.JPEG2000SignatureBox().write(ofile)
+        jp2box.FileTypeBox(brand='jpx ', compatibility_list=('jpx ', 'jp2 ', 'jpxb')).write(ofile)
 
         for i in range(len(names_in)):
             jp2 = Jp2k(names_in[i])
@@ -30,12 +33,12 @@ def jpx_merge(names_in, name_out, links):
                     head0 = head
                     # jp2h.write(ofile)
                     ofile.write(head)
-                    # CodestreamHeaderBox().write(ofile)
-                    # CompositingLayerHeaderBox().write(ofile)
+                    # jp2box.CodestreamHeaderBox().write(ofile)
+                    # jp2box.CompositingLayerHeaderBox().write(ofile)
                     ofile.write(struct.pack('>I4sI4s', 8, b'jpch', 8, b'jplh'))
                 elif head0 == head:  # identical JP2 header
-                    # CodestreamHeaderBox().write(ofile)
-                    # CompositingLayerHeaderBox().write(ofile)
+                    # jp2box.CodestreamHeaderBox().write(ofile)
+                    # jp2box.CompositingLayerHeaderBox().write(ofile)
                     ofile.write(struct.pack('>I4sI4s', 8, b'jpch', 8, b'jplh'))
                 else:  # different size/colour spec
                     # write all boxes, could be optimized
@@ -46,27 +49,31 @@ def jpx_merge(names_in, name_out, links):
 
                     if cmap is None:  # create direct colour mapping
                         num = ihdr.num_components
-                        cmap = ComponentMappingBox(component_index=range(num), mapping_type=(0,)*num, palette_index=(0,)*num)
+                        cmap = jp2box.ComponentMappingBox(component_index=range(num),
+                                                          mapping_type=(0,)*num,
+                                                          palette_index=(0,)*num)
 
                     boxes = (ihdr, cmap) if pclr is None else (ihdr, pclr, cmap)
-                    CodestreamHeaderBox(box=boxes).write(ofile)
+                    jp2box.CodestreamHeaderBox(box=boxes).write(ofile)
 
-                    cgrp = ColourGroupBox(box=(colr,))
-                    CompositingLayerHeaderBox(box=(cgrp,)).write(ofile)
+                    cgrp = jp2box.ColourGroupBox(box=(colr,))
+                    jp2box.CompositingLayerHeaderBox(box=(cgrp,)).write(ofile)
 
                 if links:
-                    ftbl.box = (FragmentListBox((jp2c.offset,), (jp2c.length,), (i+1,)),)
+                    ftbl.box = (jp2box.FragmentListBox((jp2c.offset,), (jp2c.length,), (i+1,)),)
                     ftbl.write(ofile)
 
-                    url_ = DataEntryURLBox(0, (0, 0, 0),
-                               'file://' + os.path.abspath(names_in[i]) + chr(0))  # null terminated
+                    # I.7.3.2: null terminated
+                    url_ = jp2box.DataEntryURLBox(0, (0, 0, 0),
+                                                  'file://'+os.path.abspath(names_in[i])+chr(0))
                     dtbl.DR.append(url_)
                 else:
-                    jp2c.write(ifile, ofile)
+                    copy_codestream(jp2c, ifile, ofile)
 
-            if xml_:
-                nlst = NumberListBox(associations=(0x01000000+i, 0x02000000+i))  # codestream, compositing layer
-                asocj = AssociationBox(box=(nlst, xml_))
+            if xml_ is not None:
+                # codestream, compositing layer
+                nlst = jp2box.NumberListBox(associations=(0x01000000+i, 0x02000000+i))
+                asocj = jp2box.AssociationBox(box=(nlst, xml_))
                 asoc.box.append(asocj)
             else:
                 msg = 'JP2 file ' + names_in[i] + ' contains no XML box.'

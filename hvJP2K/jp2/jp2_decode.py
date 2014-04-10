@@ -7,8 +7,10 @@ from PIL import Image
 
 from jp2_common import first_box
 
+
 if opj2.OPENJP2 is None:
     raise RuntimeError('You must have at least version 2 of OpenJPEG before using this program.')
+
 
 def jp2_decode(name_in, name_out, xml=False, rlevel=0, area=None, ignore_pclr_cmap_cdef=False, verbose=False):
     jp2 = Jp2k(name_in)

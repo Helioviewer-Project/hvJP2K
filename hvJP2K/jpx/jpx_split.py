@@ -1,14 +1,17 @@
 
-import sys, warnings
-from glymur import Jp2k
-from glymur.jp2box import *
+import sys
+import warnings
 
-from ..jp2.jp2_common import first_box
-from jpx_common import *
+from glymur import Jp2k, jp2box
+
+from ..jp2.jp2_common import first_box, copy_codestream
+import jpx_common
+
 
 def die(msg):
     warnings.warn(msg, UserWarning)
     sys.exit(1)
+
 
 def jpx_split(name_in):
     jpx = Jp2k(name_in)
@@ -23,7 +26,8 @@ def jpx_split(name_in):
     jplh = [x for x in jpx.box if x.box_id == b'jplh']
     num = len(jp2c)
 
-    if jp2h0 is None or num == 0 or num != len(jpch) or num != len(jplh):  # enforce a jpch and a jplh for each jp2c
+    # enforce a jpch and a jplh for each jp2c
+    if jp2h0 is None or num == 0 or num != len(jpch) or num != len(jplh):
         die('The file is not a valid JPX file or contains no JP2 codestreams.')
 
     ihdr0 = first_box(jp2h0, b'ihdr')
@@ -53,7 +57,7 @@ def jpx_split(name_in):
             pclr = None
             cmap = None
 
-        return JP2HeaderBox(box=filter(None, (ihdr, colr, pclr, cmap)))
+        return jp2box.JP2HeaderBox(box=filter(None, (ihdr, colr, pclr, cmap)))
 
     xmls = {}
     asoc = first_box(jpx, b'asoc')
@@ -65,17 +69,18 @@ def jpx_split(name_in):
                 if nlst is None or xml_ is None:
                     continue
                 for a in nlst.associations:
-                    if a >> 24 == 1:  # codestream
+                    # codestream
+                    if (a >> 24) == 1:
                         xmls[a & 0x00FFFFFF] = xml_
 
     for i in range(num):
         name = '{0:03d}'.format(i) + '.jp2'
         with open(name, 'wb') as ofile:
-            JPEG2000SignatureBox().write(ofile)
-            FileTypeBox().write(ofile)
+            jp2box.JPEG2000SignatureBox().write(ofile)
+            jp2box.FileTypeBox().write(ofile)
             jp2h(jpch[i], jplh[i]).write(ofile)
             if i in xmls:
                 xmls[i].write(ofile)
 
             with open(name_in, 'rb') as ifile:
-                jp2c[i].write(ifile, ofile)
+                copy_codestream(jp2c[i], ifile, ofile)

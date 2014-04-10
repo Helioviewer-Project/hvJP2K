@@ -1,5 +1,10 @@
 
-import sys, ctypes, warnings
+import os
+import sys
+import ctypes
+import struct
+import warnings
+from cStringIO import StringIO
 
 # Exitstack not found in contextlib in 2.7
 # pylint: disable=E0611
@@ -8,9 +13,8 @@ if sys.hexversion >= 0x03030000:
 else:
     from contextlib2 import ExitStack
 
-from cStringIO import StringIO
 import numpy as np
-from glymur.jp2box import *
+from glymur import jp2box
 from glymur.lib import openjp2 as opj2
 from glymur.core import PROGRESSION_ORDER, GREYSCALE
 
@@ -20,10 +24,10 @@ def hv_write_openjp2(name, img, bpp, xml, **kwargs):
     head = StringIO()
 
     nrows, ncols = img.shape
-    jp2h = JP2HeaderBox(
-                box=(ImageHeaderBox(height=nrows, width=ncols, bits_per_component=bpp),
-                     ColourSpecificationBox(colorspace=GREYSCALE)))
-    boxes = (JPEG2000SignatureBox(), FileTypeBox(), jp2h, XMLBox(xml))
+    jp2h = jp2box.JP2HeaderBox(
+                    box=(jp2box.ImageHeaderBox(height=nrows, width=ncols, bits_per_component=bpp),
+                         jp2box.ColourSpecificationBox(colorspace=GREYSCALE)))
+    boxes = (jp2box.JPEG2000SignatureBox(), jp2box.FileTypeBox(), jp2h, jp2box.XMLBox(xml))
 
     for b in boxes:
         b.write(head)
