@@ -1,22 +1,22 @@
 #! /bin/sh
 
 function file_size {
-	echo $(wc -c "$1" | awk '{ print $1 }')
+    echo $(wc -c "$1" | awk '{ print $1 }')
 }
 
 function do_test {
-	REF=$(basename $1 .jp2).ppm
-	SREF=$(file_size $REF)
+    REF=$(basename $1 .jp2).ppm
+    SREF=$(file_size $REF)
 
-	TST=test.ppm
-	/swhv/python/bin/hv_jp2_decode -i $1 -o $TST -region \{0.6,0.1\},\{0.3,0.5\} -reduce 2
-	STST=$(file_size $TST)
+    TST=test.ppm
+    /swhv/python/bin/hv_jp2_decode -i $1 -o $TST -region \{0.6,0.1\},\{0.3,0.5\} -reduce 2
+    STST=$(file_size $TST)
 
-	CMP=$(cmp -s "$TST" "$REF")
-	RES=fail
-	if [ $STST == $SREF ] && [ $? -eq 0 ]; then RES=pass; fi
-	echo $RES: $1
-	rm -f $TST
+    CMP=$(cmp -s "$TST" "$REF")
+    RES=fail
+    if [ $STST == $SREF ] && [ $? -eq 0 ]; then RES=pass; fi
+    echo $RES: $1
+    rm -f $TST
 }
 
 do_test 2010_04_01__00_00_28__PROBA2_SWAP_SWAP_174.jp2

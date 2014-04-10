@@ -186,8 +186,7 @@ def stream_seek(stream, offset):
     strm = ctypes.cast(stream, ctypes.POINTER(OPJStreamPrivate))
     seek = ctypes.cast(strm.contents.m_seek_fn, ctypes.CFUNCTYPE(ctypes.c_int64, ctypes.c_void_p))
 
-    ARGTYPES = (ctypes.c_int64, ctypes.c_void_p)
-    seek.argtypes = ARGTYPES
+    seek.argtypes = (ctypes.c_int64, ctypes.c_void_p)
     seek.restype = ctypes.c_int32
     return seek(offset, strm.contents.m_user_data)
 

@@ -5,7 +5,7 @@ import warnings
 
 from glymur import Jp2k, jp2box
 
-from ..jp2.jp2_common import first_box, copy_codestream
+from ..jp2.jp2_common import first_box, copy_codestream, codestream_size
 import jpx_common
 
 
@@ -60,7 +60,8 @@ def jpx_merge(names_in, name_out, links):
                     jp2box.CompositingLayerHeaderBox(box=(cgrp,)).write(ofile)
 
                 if links:
-                    ftbl.box = (jp2box.FragmentListBox((jp2c.offset,), (jp2c.length,), (i+1,)),)
+                    offset, length = codestream_size(jp2c)
+                    ftbl.box = (jp2box.FragmentListBox((offset,), (length,), (i+1,)),)
                     ftbl.write(ofile)
 
                     # I.7.3.2: null terminated
