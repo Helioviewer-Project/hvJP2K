@@ -14,6 +14,11 @@ def jpx_merge(names_in, name_out, links):
     ftbl = jp2box.FragmentTableBox()
     dtbl = jp2box.DataReferenceBox()
 
+    # The typical pattern of empty jpch, jplh, e.g.
+    # jp2box.CodestreamHeaderBox().write(ofile)
+    # jp2box.CompositingLayerHeaderBox().write(ofile)
+    jpch_jplh = struct.pack('>I4sI4s', 8, b'jpch', 8, b'jplh')
+
     with open(name_out, 'wb') as ofile:
         jp2box.JPEG2000SignatureBox().write(ofile)
         jp2box.FileTypeBox(brand='jpx ', compatibility_list=('jpx ', 'jp2 ', 'jpxb')).write(ofile)
@@ -33,13 +38,9 @@ def jpx_merge(names_in, name_out, links):
                     head0 = head
                     # jp2h.write(ofile)
                     ofile.write(head)
-                    # jp2box.CodestreamHeaderBox().write(ofile)
-                    # jp2box.CompositingLayerHeaderBox().write(ofile)
-                    ofile.write(struct.pack('>I4sI4s', 8, b'jpch', 8, b'jplh'))
-                elif head0 == head:  # identical JP2 header
-                    # jp2box.CodestreamHeaderBox().write(ofile)
-                    # jp2box.CompositingLayerHeaderBox().write(ofile)
-                    ofile.write(struct.pack('>I4sI4s', 8, b'jpch', 8, b'jplh'))
+                    ofile.write(jpch_jplh)
+                elif head0 == head:  # identical JP2 header, typical
+                    ofile.write(jpch_jplh)
                 else:  # different size/colour spec
                     # write all boxes, could be optimized
                     ihdr = first_box(jp2h, b'ihdr')
