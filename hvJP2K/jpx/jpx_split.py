@@ -1,6 +1,7 @@
 
 import sys
 import warnings
+from cStringIO import StringIO
 
 from glymur import Jp2k, jp2box
 
@@ -13,8 +14,8 @@ def die(msg):
     sys.exit(1)
 
 
-def jpx_split(name_in):
-    jpx = Jp2k(name_in)
+def jpx_split(jpxname):
+    jpx = Jp2k(jpxname)
 
     ftyp = jpx.box[1]
     if ftyp.brand != 'jpx ' or 'jp2 ' not in ftyp.compatibility_list:
@@ -76,16 +77,20 @@ def jpx_split(name_in):
     jp2h = jp2box.JP2HeaderBox()
 
     for i in range(num):
-        name = '{0:03d}'.format(i) + '.jp2'
-        with open(name, 'wb') as ofile:
-            sign.write(ofile)
-            ftyp.write(ofile)
+        jp2 = StringIO()
 
-            jp2h.box = jp2h_boxes(jpch[i], jplh[i])
-            jp2h.write(ofile)
+        sign.write(jp2)
+        ftyp.write(jp2)
 
-            if i in xmls:
-                xmls[i].write(ofile)
+        jp2h.box = jp2h_boxes(jpch[i], jplh[i])
+        jp2h.write(jp2)
 
-            with open(name_in, 'rb') as ifile:
-                copy_codestream(jp2c[i], ifile, ofile)
+        if i in xmls:
+            xmls[i].write(jp2)
+
+        with open(jpxname, 'rb') as ifile:
+            copy_codestream(jp2c[i], ifile, jp2)
+
+        jp2name = '{0:03d}'.format(i) + '.jp2'
+        with open(jp2name, 'wb') as ofile:
+            ofile.write(jp2.getvalue())

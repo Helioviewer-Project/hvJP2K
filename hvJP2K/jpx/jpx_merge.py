@@ -14,12 +14,9 @@ def jpx_merge(names_in, jpxname, links):
 
     num = len(names_in)
 
-    asoc_super = jp2box.AssociationBox()
     ftbl = jp2box.FragmentTableBox()
-    dtbl = jp2box.DataReferenceBox()
-
     asoc = [None]*num
-    urls = [None]*num
+    url_ = [None]*num
 
     # The typical pattern of empty jpch, jplh, e.g.
     # jp2box.CodestreamHeaderBox().write(jpx)
@@ -74,7 +71,7 @@ def jpx_merge(names_in, jpxname, links):
                 ftbl.write(jpx)
 
                 # I.7.3.2: null terminated
-                urls[i] = jp2box.DataEntryURLBox(0, (0, 0, 0),
+                url_[i] = jp2box.DataEntryURLBox(0, (0, 0, 0),
                                      'file://'+os.path.abspath(jp2name)+chr(0))
             else:
                 copy_codestream(jp2c, ifile, jpx)
@@ -87,12 +84,10 @@ def jpx_merge(names_in, jpxname, links):
             msg = 'JP2 file' +jp2name+' contains no XML box.'
             warnings.warn(msg, UserWarning)
 
-    asoc_super.box = filter(None, asoc)
-    asoc_super.write(jpx)
+    jp2box.AssociationBox(filter(None, asoc)).write(jpx)
 
     if links:
-        dtbl.DR = urls
-        dtbl.write(jpx)
+        jp2box.DataReferenceBox(data_entry_url_boxes=url_).write(jpx)
 
     with open(jpxname, 'wb') as ofile:
         ofile.write(jpx.getvalue())
