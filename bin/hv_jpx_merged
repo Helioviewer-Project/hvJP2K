@@ -1,0 +1,5 @@
+#!/usr/bin/env python
+
+from hvJP2K.jpx.jpx_merge_daemon import jpx_merge_daemon
+
+jpx_merge_daemon('/swhv/tmp/merged_socket')
