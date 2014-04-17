@@ -1,5 +1,4 @@
 
-import os
 import struct
 from cStringIO import StringIO
 
@@ -76,7 +75,7 @@ def jpx_merge(names_in, jpxname, links):
 
     if links:
         # I.7.3.2: null terminated
-        url_ = [jp2box.DataEntryURLBox(0, (0, 0, 0), 'file://'+os.path.abspath(names_in[i])+chr(0)) for i in range(jp2num)]
+        url_ = [jp2box.DataEntryURLBox(0, (0, 0, 0), 'file://'+names_in[i]+chr(0)) for i in range(jp2num)]
         jp2box.DataReferenceBox(data_entry_url_boxes=url_).write(jpx)
 
     with open(jpxname, 'wb') as ofile:
