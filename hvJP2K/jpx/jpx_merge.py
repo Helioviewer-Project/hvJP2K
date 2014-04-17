@@ -1,7 +1,6 @@
 
 import os
 import struct
-import warnings
 from cStringIO import StringIO
 
 from glymur import Jp2k, jp2box
@@ -12,11 +11,10 @@ import jpx_common
 
 def jpx_merge(names_in, jpxname, links):
 
-    num = len(names_in)
+    jp2num = len(names_in)
 
-    ftbl = jp2box.FragmentTableBox()
-    asoc = [None]*num
-    url_ = [None]*num
+    ftbl = jp2box.FragmentTableBox(box=[jp2box.FragmentListBox([1], [1], [1])])
+    asoc = [jp2box.AssociationBox(box=[jp2box.NumberListBox(associations=(0x01000000+i, 0x02000000+i)), None]) for i in range(jp2num)]
 
     # The typical pattern of empty jpch, jplh, e.g.
     # jp2box.CodestreamHeaderBox().write(jpx)
@@ -27,12 +25,12 @@ def jpx_merge(names_in, jpxname, links):
     jp2box.JPEG2000SignatureBox().write(jpx)
     jp2box.FileTypeBox(brand='jpx ', compatibility_list=('jpx ', 'jp2 ', 'jpxb')).write(jpx)
 
-    for i in range(num):
+    for i in range(jp2num):
         jp2name = names_in[i]
         jp2 = Jp2k(jp2name)
 
         jp2h = first_box(jp2, b'jp2h')
-        xml_ = first_box(jp2, b'xml ')
+        asoc[i].box[1] = first_box(jp2, b'xml ')
         jp2c = first_box(jp2, b'jp2c')
 
         with open(jp2name, 'rb') as ifile:
@@ -67,26 +65,18 @@ def jpx_merge(names_in, jpxname, links):
 
             if links:
                 offset, length = codestream_size(jp2c)
-                ftbl.box = (jp2box.FragmentListBox((offset,), (length,), (i+1,)),)
+                ftbl.box[0].fragment_offset[0] = offset
+                ftbl.box[0].fragment_length[0] = length
+                ftbl.box[0].data_reference[0] = i + 1
                 ftbl.write(jpx)
-
-                # I.7.3.2: null terminated
-                url_[i] = jp2box.DataEntryURLBox(0, (0, 0, 0),
-                                     'file://'+os.path.abspath(jp2name)+chr(0))
             else:
                 copy_codestream(jp2c, ifile, jpx)
 
-        if xml_ is not None:
-            # codestream, compositing layer
-            nlst = jp2box.NumberListBox(associations=(0x01000000+i, 0x02000000+i))
-            asoc[i] = jp2box.AssociationBox(box=(nlst, xml_))
-        else:
-            msg = 'JP2 file' +jp2name+' contains no XML box.'
-            warnings.warn(msg, UserWarning)
-
-    jp2box.AssociationBox(filter(None, asoc)).write(jpx)
+    jp2box.AssociationBox(box=[box for box in asoc if box.box[1] is not None]).write(jpx)
 
     if links:
+        # I.7.3.2: null terminated
+        url_ = [jp2box.DataEntryURLBox(0, (0, 0, 0), 'file://'+os.path.abspath(names_in[i])+chr(0)) for i in range(jp2num)]
         jp2box.DataReferenceBox(data_entry_url_boxes=url_).write(jpx)
 
     with open(jpxname, 'wb') as ofile:
