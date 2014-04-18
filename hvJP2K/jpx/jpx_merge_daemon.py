@@ -1,33 +1,26 @@
 
 import re
 import os
-import threading
 import SocketServer
-from cStringIO import StringIO
 
 from jpx_merge import jpx_merge
 
+#import time
 
-class ThreadedUnixStreamHandler(SocketServer.BaseRequestHandler):
+class ThreadedUnixStreamHandler(SocketServer.StreamRequestHandler):
     def handle(self):
-        #print(threading.currentThread().getName())
+        #start = time.clock()
 
-        msg = ''
-        while True:
-            data = self.request.recv(4096)
-            if not data: break
-            msg += data
-
-        buf = StringIO(msg)
-        jp2s_in = buf.readline().strip()
-        jpx_out = buf.readline().strip()
-        links = buf.readline().strip()
+        jp2s_in = self.rfile.readline().strip()
+        jpx_out = self.rfile.readline().strip()
+        links = self.rfile.readline().strip()
         links = True if links else False
 
         jpx_merge(filter(None, re.split(',', jp2s_in)), jpx_out, links)
+        #print(time.clock() - start)
 
-
-class ThreadedUnixStreamServer(SocketServer.ThreadingMixIn, SocketServer.UnixStreamServer):
+class ThreadedUnixStreamServer(SocketServer.ThreadingMixIn,
+                               SocketServer.UnixStreamServer):
     pass
 
 def jpx_merge_daemon(address):
@@ -38,5 +31,5 @@ def jpx_merge_daemon(address):
     # The socket needs to be writeable
     os.chmod(address, 0666)
     # Loop forever servicing requests
-    server.daemon_threads = True
+    #server.daemon_threads = True
     server.serve_forever()
