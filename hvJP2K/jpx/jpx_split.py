@@ -61,16 +61,17 @@ def jpx_split(jpxname):
     xmls = {}
     asoc_super = first_box(jpx, b'asoc')
     if asoc_super is not None:
-        for box in [x for x in asoc_super.box if x.box_id == b'asoc']:
-            nlst = first_box(box, b'nlst')
-            xml_ = first_box(box, b'xml ')
-            if nlst is None or xml_ is None:
-                continue
+        for box in asoc_super.box:
+            if box.box_id == b'asoc':
+                nlst = first_box(box, b'nlst')
+                xml_ = first_box(box, b'xml ')
+                if nlst is None or xml_ is None:
+                    continue
 
-            for asoc in nlst.associations:
-                # codestream
-                if (asoc >> 24) == 1:
-                    xmls[asoc & 0x00FFFFFF] = xml_
+                for asoc in nlst.associations:
+                    # codestream
+                    if (asoc >> 24) == 1:
+                        xmls[asoc & 0x00FFFFFF] = xml_
 
     sign = jp2box.JPEG2000SignatureBox()
     ftyp = jp2box.FileTypeBox()

@@ -74,9 +74,9 @@ args = parser.parse_args()
 args.layers = np.clip(args.layers, 1, 16)
 args.cratio = np.clip(args.cratio, 1, 128)
 
-cratios = []
-for i in xrange(args.layers):
-    cratios.append(args.cratio * 2**i)
+cratios = [None]*args.layers
+for i in range(args.layers):
+    cratios[i] = args.cratio * 2**i
 cratios.reverse()
 
 def data_process(hdu):
@@ -97,7 +97,8 @@ def data_process(hdu):
         np.clip(img, p[0], p[1], out=img)
         r = 1. / (p[1] - p[0])
         img = (img - p[0]) * r
-        xfer[args.function](img)
+
+    xfer[args.function](img)
 
     np.rint(((1 << args.bpp) - 1) * img, out=img)
     img = np.flipud(img.astype(np.uint16))
