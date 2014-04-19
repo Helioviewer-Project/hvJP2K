@@ -4,7 +4,11 @@ import sys
 import ctypes
 import struct
 import warnings
-from cStringIO import StringIO
+
+if sys.hexversion >= 0x03000000:
+    from io import BytesIO
+else:
+    from cStringIO import StringIO as BytesIO
 
 # Exitstack not found in contextlib in 2.7
 # pylint: disable=E0611
@@ -21,7 +25,7 @@ from glymur.core import PROGRESSION_ORDER, GREYSCALE
 
 def hv_write_openjp2(name, img, bpp, xml, **kwargs):
 
-    head = StringIO()
+    head = BytesIO()
 
     nrows, ncols = img.shape
     boxes = (jp2box.JPEG2000SignatureBox(),

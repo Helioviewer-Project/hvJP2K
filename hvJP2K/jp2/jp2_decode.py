@@ -5,7 +5,7 @@ from glymur.lib import openjp2 as opj2
 from lxml import etree as et
 from PIL import Image
 
-from jp2_common import first_box
+from .jp2_common import first_box
 
 
 if opj2.OPENJP2 is None:

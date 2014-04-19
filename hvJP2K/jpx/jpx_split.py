@@ -1,12 +1,16 @@
 
 import sys
 import warnings
-from cStringIO import StringIO
+
+if sys.hexversion >= 0x03000000:
+    from io import BytesIO
+else:
+    from cStringIO import StringIO as BytesIO
 
 from glymur import Jp2k, jp2box
 
 from ..jp2.jp2_common import first_box, copy_codestream
-import jpx_common
+from . import jpx_common
 
 
 def die(msg):
@@ -56,7 +60,7 @@ def jpx_split(jpxname):
             pclr = None
             cmap = None
 
-        return filter(None, (ihdr, colr, pclr, cmap))
+        return [box for box in (ihdr, colr, pclr, cmap) if box is not None]
 
     xmls = {}
     asoc_super = first_box(jpx, b'asoc')
@@ -78,7 +82,7 @@ def jpx_split(jpxname):
     jp2h = jp2box.JP2HeaderBox()
 
     for i in range(num):
-        jp2 = StringIO()
+        jp2 = BytesIO()
 
         sign.write(jp2)
         ftyp.write(jp2)

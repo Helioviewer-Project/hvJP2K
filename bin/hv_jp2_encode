@@ -67,7 +67,7 @@ parser.add_argument('-hdu', metavar='<FITS HDU index to process>', type=int, nar
 parser.add_argument('-layers', metavar='<quality layers number>', type=int, nargs='?', default=4, const=4)
 parser.add_argument('-cratio', metavar='<compression ratio>', type=float, nargs='?', default=6, const=6)
 parser.add_argument('-bpp', metavar='<bits per pixel>', choices=bpps, type=int, nargs='?', default=8, const=8)
-parser.add_argument('-f', '--function', choices=xfer.keys(), help='pixel transfer function', nargs='?', default='sgamma', const='sgamma')
+parser.add_argument('-f', '--function', choices=list(xfer.keys()), help='pixel transfer function', nargs='?', default='sgamma', const='sgamma')
 parser.add_argument('-v', '--verbose', help='verbose operation', action='store_true')
 args = parser.parse_args()
 
