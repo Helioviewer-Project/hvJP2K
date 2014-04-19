@@ -17,7 +17,7 @@ def jp2_decode(name_in, name_out, xml=False, rlevel=0, area=None,
 
     jp2 = Jp2k(name_in)
 
-    xml_ = first_box(jp2, b'xml ')
+    xml_ = first_box(jp2, 'xml ')
     if xml and xml_ is not None:
         print(et.tostring(xml_.xml))
 

@@ -15,8 +15,8 @@ class ThreadedUnixStreamHandler(socketserver.StreamRequestHandler):
     def handle(self):
         #start = time.clock()
 
-        jp2s_in = self.rfile.readline().strip()
-        jpx_out = self.rfile.readline().strip()
+        jp2s_in = self.rfile.readline().decode('utf-8').strip()
+        jpx_out = self.rfile.readline().decode('utf-8').strip()
         links = self.rfile.readline().strip()
         links = True if links else False
 
