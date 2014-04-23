@@ -18,10 +18,9 @@ def jpx_merge(names_in, jpxname, links):
     jp2num = len(names_in)
 
     ftbl = jp2box.FragmentTableBox(box=[jp2box.FragmentListBox([1], [1], [1])])
-    #asoc = [jp2box.AssociationBox(box=[jp2box.NumberListBox(associations=(0x01000000+i, 0x02000000+i)), None]) for i in range(jp2num)]
     xmls = [None]*jp2num
 
-    # The typical pattern of empty jpch, jplh, e.g.
+    # typical pattern of empty jpch, jplh, e.g.
     # jp2box.CodestreamHeaderBox().write(jpx)
     # jp2box.CompositingLayerHeaderBox().write(jpx)
     jpch_jplh = struct.pack('>I4sI4s', 8, b'jpch', 8, b'jplh')
@@ -36,7 +35,6 @@ def jpx_merge(names_in, jpxname, links):
 
         jp2h = first_box(jp2, 'jp2h')
         xmls[i] = first_box(jp2, 'xml ')
-        #asoc[i].box[1] = first_box(jp2, 'xml ')
         jp2c = first_box(jp2, 'jp2c')
 
         with open(jp2name, 'rb') as ifile:
@@ -78,7 +76,7 @@ def jpx_merge(names_in, jpxname, links):
             else:
                 copy_codestream(jp2c, ifile, jpx)
 
-    #jp2box.AssociationBox(box=[box for box in asoc if box.box[1] is not None]).write(jpx)
+    # write 'asoc' box manually to avoid object creation overhead
     orig_pos = jpx.tell()
     jpx.write(struct.pack('>I4s', 0, b'asoc'))
 
@@ -97,6 +95,7 @@ def jpx_merge(names_in, jpxname, links):
     jpx.seek(end_pos)
 
     if links:
+        # write 'dtbl' box manually to avoid object creation overhead
         url_ = jp2box.DataEntryURLBox(0, (0, 0, 0), None)
 
         orig_pos = jpx.tell()
