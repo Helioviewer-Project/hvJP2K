@@ -23,7 +23,8 @@ def jpx_merge(names_in, jpxname, links):
     jp2num = len(names_in)
 
     flst = jp2box.FragmentListBox([1], [1], [1])
-    ftbl = struct.pack('>I4s', 0, b'ftbl')
+    # ftbl with 1 flst with 1 fragment
+    ftbl = struct.pack('>I4s', 8 + 8 + 2 + 14, b'ftbl')
     xmls = [None]*jp2num
 
     # typical pattern of empty jpch, jplh, e.g.
@@ -78,17 +79,10 @@ def jpx_merge(names_in, jpxname, links):
                 jp2box.CompositingLayerHeaderBox(box=(cgrp,)).write(jpx)
 
             if links:
-                orig_pos = jpx.tell()
                 jpx.write(ftbl)
-
                 flst.fragment_offset[0], flst.fragment_length[0] = codestream_size(jp2c)
                 flst.data_reference[0] = i + 1
                 flst.write(jpx)
-
-                end_pos = jpx.tell()
-                jpx.seek(orig_pos)
-                jpx.write(struct.pack('>I', end_pos - orig_pos))
-                jpx.seek(end_pos)
             else:
                 copy_codestream(jp2c, ifile, jpx)
 
