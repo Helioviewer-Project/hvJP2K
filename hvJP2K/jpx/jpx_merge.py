@@ -86,7 +86,7 @@ def jpx_merge(names_in, jpxname, links):
             else:
                 copy_codestream(jp2c, ifile, jpx)
 
-    # write 'asoc' box manually to avoid object creation overhead
+    # write asoc manually to avoid object creation overhead
     orig_pos = jpx.tell()
     jpx.write(struct.pack('>I4s', 0, b'asoc'))
 
@@ -105,7 +105,7 @@ def jpx_merge(names_in, jpxname, links):
     jpx.seek(end_pos)
 
     if links:
-        # write 'dtbl' box manually to avoid object creation overhead
+        # write dtbl manually to avoid object creation overhead
         url_ = jp2box.DataEntryURLBox(0, (0, 0, 0), None)
 
         orig_pos = jpx.tell()

@@ -43,7 +43,7 @@ def jpx_split(jpxname):
     cmap0 = first_box(jp2h0, 'cmap')
 
     def jp2h_boxes(jpch, jplh):
-        # fish for size/colour boxes in CodestreamHeader and CompositingLayerHeader
+        # fish for size/colour boxes in jpch and jplh
         ihdr = first_box(jpch, 'ihdr')
         pclr = first_box(jpch, 'pclr')
         cmap = first_box(jpch, 'cmap')
@@ -51,7 +51,7 @@ def jpx_split(jpxname):
         cgrp = first_box(jplh, 'cgrp')
         colr = None if cgrp is None else first_box(cgrp, 'colr')
 
-        # replace missing boxes from the main JP2Header
+        # replace missing boxes from the main jp2h
         if ihdr is None: ihdr = ihdr0
         if colr is None: colr = colr0
         if pclr is None: pclr = pclr0
@@ -64,7 +64,7 @@ def jpx_split(jpxname):
 
         return [box for box in (ihdr, colr, pclr, cmap) if box is not None]
 
-    xmls = {}
+    xmls = [None]*num
     asoc_super = first_box(jpx, 'asoc')
     if asoc_super is not None:
         for box in asoc_super.box:
@@ -83,21 +83,22 @@ def jpx_split(jpxname):
     ftyp = jp2box.FileTypeBox()
     jp2h = jp2box.JP2HeaderBox()
 
-    for i in range(num):
-        jp2 = BytesIO()
+    with open(jpxname, 'rb') as ifile:
+        for i in range(num):
+            jp2 = BytesIO()
 
-        sign.write(jp2)
-        ftyp.write(jp2)
+            sign.write(jp2)
+            ftyp.write(jp2)
 
-        jp2h.box = jp2h_boxes(jpch[i], jplh[i])
-        jp2h.write(jp2)
+            jp2h.box = jp2h_boxes(jpch[i], jplh[i])
+            jp2h.write(jp2)
 
-        if i in xmls:
-            xmls[i].write(jp2)
+            xml_ = xmls[i]
+            if xml_ is not None:
+                xml_.write(jp2)
 
-        with open(jpxname, 'rb') as ifile:
             copy_codestream(jp2c[i], ifile, jp2)
 
-        jp2name = '{0:03d}'.format(i) + '.jp2'
-        with open(jp2name, 'wb') as ofile:
-            ofile.write(jp2.getvalue())
+            jp2name = '{0:03d}'.format(i) + '.jp2'
+            with open(jp2name, 'wb') as ofile:
+                ofile.write(jp2.getvalue())
