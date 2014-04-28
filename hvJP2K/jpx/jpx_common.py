@@ -40,3 +40,21 @@ class hvJP2HeaderBox(Jp2kBox):
     def hv_parse(self, fptr):
         fptr.seek(self.offset + 8)
         self.box = self.parse_superbox(fptr)
+
+
+class hvFileTypeBox(Jp2kBox):
+    def __init__(self, brand='jp2 ', minor_version=0,
+                 compatibility_list=None, length=0, offset=-1):
+        Jp2kBox.__init__(self, box_id='ftyp', longname='File Type')
+        self.brand = brand
+        self.minor_version = minor_version
+        if compatibility_list is None:
+            self.compatibility_list = ['jp2 ']
+        else:
+            self.compatibility_list = compatibility_list
+        self.length = length
+        self.offset = offset
+
+    @classmethod
+    def parse(cls, fptr, offset, length):
+        return cls(length=length, offset=offset)

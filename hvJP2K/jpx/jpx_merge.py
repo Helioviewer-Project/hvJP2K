@@ -13,6 +13,7 @@ from ..jp2.jp2_common import first_box, copy_codestream, codestream_size
 from . import jpx_common
 
 # override some glymur box parsing
+jp2box._BOX_WITH_ID[b'ftyp'] = jpx_common.hvFileTypeBox
 jp2box._BOX_WITH_ID[b'jp2h'] = jpx_common.hvJP2HeaderBox
 jp2box._BOX_WITH_ID[b'xml '] = jpx_common.hvXMLBox
 
