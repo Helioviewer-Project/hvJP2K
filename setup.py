@@ -29,6 +29,6 @@ clssfrs = ["Programming Language :: Python",
            "Topic :: Software Development :: Libraries :: Python Modules"]
 kwargs['classifiers'] = clssfrs
 
-kwargs['version'] = '0.1'
+kwargs['version'] = '0.2'
 
 setup(**kwargs)

@@ -12,12 +12,17 @@ from glymur import Jp2k, jp2box
 from ..jp2.jp2_common import first_box, copy_codestream, codestream_size
 from . import jpx_common
 
+# override some glymur box parsing
+jp2box._BOX_WITH_ID[b'jp2h'] = jpx_common.hvJP2HeaderBox
+jp2box._BOX_WITH_ID[b'xml '] = jpx_common.hvXMLBox
 
+# @profile
 def jpx_merge(names_in, jpxname, links):
 
     jp2num = len(names_in)
 
-    ftbl = jp2box.FragmentTableBox(box=[jp2box.FragmentListBox([1], [1], [1])])
+    flst = jp2box.FragmentListBox([1], [1], [1])
+    ftbl = struct.pack('>I4s', 0, b'ftbl')
     xmls = [None]*jp2num
 
     # typical pattern of empty jpch, jplh, e.g.
@@ -43,12 +48,16 @@ def jpx_merge(names_in, jpxname, links):
 
             if i == 0:  # reference first
                 head0 = head
+                # parse to ensure validity
+                jp2h.hv_parse(ifile)
                 # jp2h.write(jpx)
                 jpx.write(head)
                 jpx.write(jpch_jplh)
             elif head0 == head:  # identical JP2 header, typical
                 jpx.write(jpch_jplh)
             else:  # different size/colour spec
+                # parse to access child boxes
+                jp2h.hv_parse(ifile)
                 # write all boxes, could be optimized
                 ihdr = first_box(jp2h, 'ihdr')
                 colr = first_box(jp2h, 'colr')
@@ -68,11 +77,17 @@ def jpx_merge(names_in, jpxname, links):
                 jp2box.CompositingLayerHeaderBox(box=(cgrp,)).write(jpx)
 
             if links:
-                offset, length = codestream_size(jp2c)
-                ftbl.box[0].fragment_offset[0] = offset
-                ftbl.box[0].fragment_length[0] = length
-                ftbl.box[0].data_reference[0] = i + 1
-                ftbl.write(jpx)
+                orig_pos = jpx.tell()
+                jpx.write(ftbl)
+
+                flst.fragment_offset[0], flst.fragment_length[0] = codestream_size(jp2c)
+                flst.data_reference[0] = i + 1
+                flst.write(jpx)
+
+                end_pos = jpx.tell()
+                jpx.seek(orig_pos)
+                jpx.write(struct.pack('>I', end_pos - orig_pos))
+                jpx.seek(end_pos)
             else:
                 copy_codestream(jp2c, ifile, jpx)
 

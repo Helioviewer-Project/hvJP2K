@@ -12,6 +12,8 @@ from glymur import Jp2k, jp2box
 from ..jp2.jp2_common import first_box, copy_codestream
 from . import jpx_common
 
+# override some glymur box parsing
+jp2box._BOX_WITH_ID[b'xml '] = jpx_common.hvXMLBox
 
 def die(msg):
     warnings.warn(msg, UserWarning)
