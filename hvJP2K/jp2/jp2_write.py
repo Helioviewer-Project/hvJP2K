@@ -163,8 +163,8 @@ def __write_openjp2(img_array, filename, offset, comp_prec=8, verbose=False, **k
 
         opj2.setup_encoder(codec, cparams, image)
 
-        strm = opj2.stream_create_default_file_stream_v3(filename, False)
-        stack.callback(opj2.stream_destroy_v3, strm)
+        strm = opj2.stream_create_default_file_stream(filename, False)
+        stack.callback(opj2.stream_destroy, strm)
 
         stream_seek(strm, offset)
 
