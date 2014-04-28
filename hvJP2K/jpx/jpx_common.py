@@ -30,8 +30,10 @@ class hvJP2HeaderBox(Jp2kBox):
         self.offset = offset
         self.box = box if box is not None else []
 
+    '''
     def write(self, fptr):
         self._write_superbox(fptr, b'jp2h')
+    '''
 
     @classmethod
     def parse(cls, fptr, offset, length):
