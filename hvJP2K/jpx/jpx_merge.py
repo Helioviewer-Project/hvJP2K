@@ -7,7 +7,7 @@ if sys.hexversion >= 0x03000000:
 else:
     from cStringIO import StringIO as BytesIO
 
-from glymur import Jp2k, jp2box
+from glymur import jp2box
 
 from ..jp2.jp2_common import first_box
 from . import jpx_common
@@ -101,7 +101,7 @@ def jpx_merge(names_in, jpxname, links):
 
     for i in range(num):
         jp2name = names_in[i]
-        jp2 = Jp2k(jp2name)
+        jp2 = jpx_common.hvJp2k(jp2name)
 
         # failed JP2 signature or file type verification
         if jp2.box[0] is None or jp2.box[1] is None:

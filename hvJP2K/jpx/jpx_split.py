@@ -7,7 +7,7 @@ if sys.hexversion >= 0x03000000:
 else:
     from cStringIO import StringIO as BytesIO
 
-from glymur import Jp2k, jp2box
+from glymur import jp2box
 
 from ..jp2.jp2_common import first_box
 from . import jpx_common
@@ -22,7 +22,7 @@ def die(msg):
 
 
 def jpx_split(jpxname):
-    jpx = Jp2k(jpxname)
+    jpx = jpx_common.hvJp2k(jpxname)
 
     ftyp = jpx.box[1]
     if ftyp.brand != 'jpx ' or 'jp2 ' not in ftyp.compatibility_list:
