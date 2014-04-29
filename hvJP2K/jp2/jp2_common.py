@@ -3,7 +3,11 @@ import struct
 
 
 def first_box(sup, box_id):
-    return next((x for x in sup.box if x.box_id == box_id), None)
+    for box in sup.box:
+        if box.box_id == box_id:
+            return box
+
+    return None
 
 
 def codestream_size(jp2c):
