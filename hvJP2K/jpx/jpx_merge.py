@@ -13,6 +13,7 @@ from ..jp2.jp2_common import first_box, copy_codestream, codestream_size
 from . import jpx_common
 
 # override some glymur box parsing
+jp2box._BOX_WITH_ID[b'jP  '] = jpx_common.hvJPEG2000SignatureBox
 jp2box._BOX_WITH_ID[b'ftyp'] = jpx_common.hvFileTypeBox
 jp2box._BOX_WITH_ID[b'jp2h'] = jpx_common.hvJP2HeaderBox
 jp2box._BOX_WITH_ID[b'xml '] = jpx_common.hvXMLBox
@@ -95,9 +96,15 @@ def jpx_merge(names_in, jpxname, links):
     jp2box.JPEG2000SignatureBox().write(jpx)
     jp2box.FileTypeBox(brand='jpx ', compatibility_list=('jpx ', 'jp2 ', 'jpxb')).write(jpx)
 
+    head0 = None
+
     for i in range(num):
         jp2name = names_in[i]
         jp2 = Jp2k(jp2name)
+
+        # failed JP2 signature or file type verification
+        if jp2.box[0] is None or jp2.box[1] is None:
+            continue
 
         jp2h = first_box(jp2, 'jp2h')
         xmls[i] = first_box(jp2, 'xml ')
@@ -108,7 +115,7 @@ def jpx_merge(names_in, jpxname, links):
             head = ifile.read(jp2h.length)
 
             # first is reference
-            if i == 0:
+            if head0 is None:
                 head0 = head
                 # parse to ensure validity
                 jp2h.hv_parse(ifile)
