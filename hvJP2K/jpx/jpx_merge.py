@@ -39,6 +39,44 @@ def write_jpch_jplh(jp2h, jpx):
     jp2box.CompositingLayerHeaderBox(box=[cgrp]).write(jpx)
 
 
+def write_asoc(xmls, jpx):
+    num = len(xmls)
+
+    orig_pos = jpx.tell()
+    jpx.write(struct.pack('>I4s', 0, b'asoc'))
+
+    for i in range(num):
+        if xmls[i] is not None:
+            # 8 + 16
+            jpx.write(struct.pack('>I4s', 24 + xmls[i].length, b'asoc'))
+            # 8 + 4 + 4
+            jpx.write(struct.pack('>I4sII', 16, b'nlst', 0x01000000+i, 0x02000000+i))
+            jpx.write(xmls[i].xmlbuf)
+
+    end_pos = jpx.tell()
+    jpx.seek(orig_pos)
+    jpx.write(struct.pack('>I', end_pos - orig_pos))
+    jpx.seek(end_pos)
+
+
+def write_dtbl(files, jpx):
+    num = len(files)
+
+    orig_pos = jpx.tell()
+    jpx.write(struct.pack('>I4sH', 0, b'dtbl', num))
+
+    for i in range(num):
+        url_ = b'file://' + files[i].encode() + b'\0'
+        # 8 + 1 + 1 + 1 + 1
+        jpx.write(struct.pack('>I4sI', 12 + len(url_), b'url ', 0))
+        jpx.write(url_)
+
+    end_pos = jpx.tell()
+    jpx.seek(orig_pos)
+    jpx.write(struct.pack('>I', end_pos - orig_pos))
+    jpx.seek(end_pos)
+
+
 # @profile
 def jpx_merge(names_in, jpxname, links):
 
@@ -74,7 +112,7 @@ def jpx_merge(names_in, jpxname, links):
                 head0 = head
                 # parse to ensure validity
                 jp2h.hv_parse(ifile)
-                # jp2h.write(jpx) equivalent
+                # equivalent to jp2h.write(jpx)
                 jpx.write(head)
                 jpx.write(empty_jpch_jplh)
             # identical JP2 header, typical
@@ -93,38 +131,10 @@ def jpx_merge(names_in, jpxname, links):
             else:
                 copy_codestream(jp2c, ifile, jpx)
 
-    # write asoc manually to avoid object creation overhead
-    orig_pos = jpx.tell()
-    jpx.write(struct.pack('>I4s', 0, b'asoc'))
-
-    nlst = jp2box.NumberListBox(associations=[0, 0])
-    asoc = jp2box.AssociationBox(box=[nlst, None])
-    for i in range(num):
-        if xmls[i] is not None:
-            nlst.associations[0] = 0x01000000 + i
-            nlst.associations[1] = 0x02000000 + i
-            asoc.box[1] = xmls[i]
-            asoc.write(jpx)
-
-    end_pos = jpx.tell()
-    jpx.seek(orig_pos)
-    jpx.write(struct.pack('>I', end_pos - orig_pos))
-    jpx.seek(end_pos)
+    write_asoc(xmls, jpx)
 
     if links:
-        # write dtbl manually to avoid object creation overhead
-        orig_pos = jpx.tell()
-        jpx.write(struct.pack('>I4sH', 0, b'dtbl', num))
-
-        url_ = jp2box.DataEntryURLBox(0, (0, 0, 0), None)
-        for i in range(num):
-            url_.url = 'file://' + names_in[i] + chr(0)
-            url_.write(jpx)
-
-        end_pos = jpx.tell()
-        jpx.seek(orig_pos)
-        jpx.write(struct.pack('>I', end_pos - orig_pos))
-        jpx.seek(end_pos)
+        write_dtbl(names_in, jpx)
 
     with open(jpxname, 'wb') as ofile:
         ofile.write(jpx.getvalue())
