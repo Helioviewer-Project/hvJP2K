@@ -9,11 +9,12 @@ else:
 
 from glymur import Jp2k, jp2box
 
-from ..jp2.jp2_common import first_box, copy_codestream
+from ..jp2.jp2_common import first_box
 from . import jpx_common
 
 # override some glymur box parsing
 jp2box._BOX_WITH_ID[b'xml '] = jpx_common.hvXMLBox
+jp2box._BOX_WITH_ID[b'jp2c'] = jpx_common.hvContiguousCodestreamBox
 
 def die(msg):
     warnings.warn(msg, UserWarning)
@@ -95,9 +96,9 @@ def jpx_split(jpxname):
 
             xml_ = xmls[i]
             if xml_ is not None:
-                xml_.write(jp2)
+                jp2.write(xml_.xmlbuf)
 
-            copy_codestream(jp2c[i], ifile, jp2)
+            jp2c[i].copy(ifile, jp2)
 
             jp2name = '{0:03d}'.format(i) + '.jp2'
             with open(jp2name, 'wb') as ofile:

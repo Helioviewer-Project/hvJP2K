@@ -9,14 +9,15 @@ else:
 
 from glymur import Jp2k, jp2box
 
-from ..jp2.jp2_common import first_box, copy_codestream, codestream_size
+from ..jp2.jp2_common import first_box
 from . import jpx_common
 
-# override some glymur box parsing
+# override glymur box parsing
 jp2box._BOX_WITH_ID[b'jP  '] = jpx_common.hvJPEG2000SignatureBox
 jp2box._BOX_WITH_ID[b'ftyp'] = jpx_common.hvFileTypeBox
 jp2box._BOX_WITH_ID[b'jp2h'] = jpx_common.hvJP2HeaderBox
 jp2box._BOX_WITH_ID[b'xml '] = jpx_common.hvXMLBox
+jp2box._BOX_WITH_ID[b'jp2c'] = jpx_common.hvContiguousCodestreamBox
 
 
 def write_jpch_jplh(jp2h, jpx):
@@ -133,10 +134,9 @@ def jpx_merge(names_in, jpxname, links):
 
             if links:
                 jpx.write(ftbl_flst)
-                offset, length = codestream_size(jp2c)
-                jpx.write(struct.pack('>QIH', offset, length, i + 1))
+                jpx.write(struct.pack('>QIH', jp2c.offset, jp2c.length, i + 1))
             else:
-                copy_codestream(jp2c, ifile, jpx)
+                jp2c.copy(ifile, jpx)
 
     write_asoc(xmls, jpx)
 

@@ -1,9 +1,6 @@
 
-import glymur
+import struct
 from glymur.jp2box import Jp2kBox
-
-# do not parse the codestreams
-glymur.set_parseoptions(codestream=False)
 
 
 class hvJPEG2000SignatureBox(Jp2kBox):
@@ -60,11 +57,25 @@ class hvXMLBox(Jp2kBox):
         self.length = length
         self.offset = offset
 
-    def write(self, fptr):
-        fptr.write(self.xmlbuf)
-
     @classmethod
     def parse(cls, fptr, offset, length):
         # grab entire box
         fptr.seek(offset)
         return cls(xmlbuf=fptr.read(length), length=length, offset=offset)
+
+
+class hvContiguousCodestreamBox(Jp2kBox):
+    def __init__(self, length=0, offset=-1):
+        Jp2kBox.__init__(self, box_id='jp2c', longname='Contiguous Codestream')
+        self.length = length
+        self.offset = offset
+
+    @classmethod
+    def parse(cls, fptr, offset=0, length=0):
+        main_header_offset = fptr.tell()
+        return cls(length=length+offset-main_header_offset, offset=main_header_offset)
+
+    def copy(self, ifile, ofile):
+        ifile.seek(self.offset)
+        ofile.write(struct.pack('>I4s', self.length + 8, b'jp2c'))
+        ofile.write(ifile.read(self.length))
