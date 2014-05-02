@@ -15,7 +15,7 @@ class hvJp2k(Jp2kBox):
 
 
 class hvJPEG2000SignatureBox(Jp2kBox):
-    def __init__(self, length=0, offset=-1):
+    def __init__(self, length, offset):
         self.box_id = 'jP  '
         self.offset = offset
         self.length = length
@@ -26,11 +26,11 @@ class hvJPEG2000SignatureBox(Jp2kBox):
             print('JP2 signature verification failed: ' + fptr.name)
             return None
 
-        return cls(length=length, offset=offset)
+        return cls(length, offset)
 
 
 class hvFileTypeBox(Jp2kBox):
-    def __init__(self, length=0, offset=-1):
+    def __init__(self, length, offset):
         self.box_id = 'ftyp'
         self.offset = offset
         self.length = length
@@ -41,11 +41,11 @@ class hvFileTypeBox(Jp2kBox):
             print('JP2 file type verification failed: ' + fptr.name)
             return None
 
-        return cls(length=length, offset=offset)
+        return cls(length, offset)
 
 
 class hvJP2HeaderBox(Jp2kBox):
-    def __init__(self, length=0, offset=-1):
+    def __init__(self, length, offset):
         self.box_id = 'jp2h'
         self.offset = offset
         self.length = length
@@ -53,7 +53,7 @@ class hvJP2HeaderBox(Jp2kBox):
 
     @classmethod
     def parse(cls, fptr, offset, length):
-        return cls(length=length, offset=offset)
+        return cls(length, offset)
 
     def hv_parse(self, fptr):
         fptr.seek(self.offset + 8)
@@ -61,7 +61,7 @@ class hvJP2HeaderBox(Jp2kBox):
 
 
 class hvXMLBox(Jp2kBox):
-    def __init__(self, xmlbuf=None, length=0, offset=-1):
+    def __init__(self, xmlbuf, length, offset):
         self.box_id = 'xml '
         self.offset = offset
         self.length = length
@@ -71,19 +71,19 @@ class hvXMLBox(Jp2kBox):
     def parse(cls, fptr, offset, length):
         # grab entire box
         fptr.seek(offset)
-        return cls(xmlbuf=fptr.read(length), length=length, offset=offset)
+        return cls(fptr.read(length), length, offset)
 
 
 class hvContiguousCodestreamBox(Jp2kBox):
-    def __init__(self, length=0, offset=-1):
+    def __init__(self, length, offset):
         self.box_id = 'jp2c'
         self.offset = offset
         self.length = length
 
     @classmethod
-    def parse(cls, fptr, offset=0, length=0):
+    def parse(cls, fptr, offset, length):
         main_header_offset = fptr.tell()
-        return cls(length=length+offset-main_header_offset, offset=main_header_offset)
+        return cls(length + offset - main_header_offset, main_header_offset)
 
     def copy(self, ifile, ofile):
         ifile.seek(self.offset)
