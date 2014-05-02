@@ -41,44 +41,6 @@ def write_jpch_jplh(jp2h, jpx):
     jp2box.CompositingLayerHeaderBox(box=[cgrp]).write(jpx)
 
 
-def write_asoc(xmls, jpx):
-    num = len(xmls)
-
-    orig_pos = jpx.tell()
-    jpx.write(struct.pack('>I4s', 0, b'asoc'))
-
-    for i in range(num):
-        if xmls[i] is not None:
-            # 8 + 16
-            jpx.write(struct.pack('>I4s', 24 + xmls[i].length, b'asoc'))
-            # 8 + 4 + 4
-            jpx.write(struct.pack('>I4sII', 16, b'nlst', 0x01000000+i, 0x02000000+i))
-            jpx.write(xmls[i].xmlbuf)
-
-    end_pos = jpx.tell()
-    jpx.seek(orig_pos)
-    jpx.write(struct.pack('>I', end_pos - orig_pos))
-    jpx.seek(end_pos)
-
-
-def write_dtbl(files, jpx):
-    num = len(files)
-
-    orig_pos = jpx.tell()
-    jpx.write(struct.pack('>I4sH', 0, b'dtbl', num))
-
-    for i in range(num):
-        url_ = b'file://' + files[i].encode() + b'\0'
-        # 8 + 1 + 1 + 1 + 1
-        jpx.write(struct.pack('>I4sI', 12 + len(url_), b'url ', 0))
-        jpx.write(url_)
-
-    end_pos = jpx.tell()
-    jpx.seek(orig_pos)
-    jpx.write(struct.pack('>I', end_pos - orig_pos))
-    jpx.seek(end_pos)
-
-
 # @profile
 def jpx_merge(names_in, jpxname, links):
 
@@ -86,16 +48,24 @@ def jpx_merge(names_in, jpxname, links):
 
     # ftbl with 1 flst with 1 fragment
     ftbl_flst = struct.pack('>I4sI4sH', 8 + 8 + 2 + 14, b'ftbl', 8 + 2 + 14, b'flst', 1)
-    xmls = [None]*num
 
     # typical pattern of empty jpch, jplh, e.g.
     # jp2box.CodestreamHeaderBox().write(jpx)
     # jp2box.CompositingLayerHeaderBox().write(jpx)
     empty_jpch_jplh = struct.pack('>I4sI4s', 8, b'jpch', 8, b'jplh')
 
+    # jpx stream
     jpx = BytesIO()
     jp2box.JPEG2000SignatureBox().write(jpx)
     jp2box.FileTypeBox(brand='jpx ', compatibility_list=('jpx ', 'jp2 ', 'jpxb')).write(jpx)
+
+    # asoc stream
+    asoc = BytesIO()
+    asoc.write(struct.pack('>4s', b'asoc'))
+
+    # dtbl stream
+    dtbl = BytesIO()
+    dtbl.write(struct.pack('>4sH', b'dtbl', num))
 
     head0 = None
 
@@ -108,8 +78,15 @@ def jpx_merge(names_in, jpxname, links):
             continue
 
         jp2h = first_box(jp2, 'jp2h')
-        xmls[i] = first_box(jp2, 'xml ')
+        xml_ = first_box(jp2, 'xml ')
         jp2c = first_box(jp2, 'jp2c')
+
+        if xml_ is not None:
+            # 8 + 16
+            asoc.write(struct.pack('>I4s', 24 + xml_.length, b'asoc'))
+            # 8 + 4 + 4
+            asoc.write(struct.pack('>I4sII', 16, b'nlst', 0x01000000+i, 0x02000000+i))
+            asoc.write(xml_.xmlbuf)
 
         with open(jp2name, 'rb') as ifile:
             ifile.seek(jp2h.offset)
@@ -135,13 +112,22 @@ def jpx_merge(names_in, jpxname, links):
             if links:
                 jpx.write(ftbl_flst)
                 jpx.write(struct.pack('>QIH', jp2c.offset, jp2c.length, i + 1))
+
+                url_ = b'file://' + jp2name.encode() + b'\0'
+                # 8 + 1 + 1 + 1 + 1
+                dtbl.write(struct.pack('>I4sI', 12 + len(url_), b'url ', 0))
+                dtbl.write(url_)
             else:
                 jp2c.copy(ifile, jpx)
 
-    write_asoc(xmls, jpx)
-
-    if links:
-        write_dtbl(names_in, jpx)
-
     with open(jpxname, 'wb') as ofile:
         ofile.write(jpx.getvalue())
+
+        # asoc size
+        ofile.write(struct.pack('>I', asoc.tell()))
+        ofile.write(asoc.getvalue())
+
+        if links:
+            # dtbl size
+            ofile.write(struct.pack('>I', dtbl.tell()))
+            ofile.write(dtbl.getvalue())
