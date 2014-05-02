@@ -7,7 +7,8 @@ from glymur.jp2box import Jp2kBox
 
 class hvJp2k(Jp2kBox):
     def __init__(self, filename):
-        Jp2kBox.__init__(self, offset=0, length=os.path.getsize(filename))
+        self.offset = 0
+        self.length = os.path.getsize(filename)
 
         with open(filename, 'rb') as fptr:
             self.box = self.parse_superbox(fptr)
@@ -15,8 +16,9 @@ class hvJp2k(Jp2kBox):
 
 class hvJPEG2000SignatureBox(Jp2kBox):
     def __init__(self, length=0, offset=-1):
-        Jp2kBox.__init__(self, box_id='jP  ', offset=offset, length=length,
-                         longname='JPEG 2000 Signature')
+        self.box_id = 'jP  '
+        self.offset = offset
+        self.length = length
 
     @classmethod
     def parse(cls, fptr, offset, length):
@@ -29,8 +31,9 @@ class hvJPEG2000SignatureBox(Jp2kBox):
 
 class hvFileTypeBox(Jp2kBox):
     def __init__(self, length=0, offset=-1):
-        Jp2kBox.__init__(self, box_id='ftyp', offset=offset, length=length,
-                         longname='File Type')
+        self.box_id = 'ftyp'
+        self.offset = offset
+        self.length = length
 
     @classmethod
     def parse(cls, fptr, offset, length):
@@ -42,10 +45,11 @@ class hvFileTypeBox(Jp2kBox):
 
 
 class hvJP2HeaderBox(Jp2kBox):
-    def __init__(self, box=None, length=0, offset=-1):
-        Jp2kBox.__init__(self, box_id='jp2h', offset=offset, length=length,
-                         longname='JP2 Header')
-        self.box = box if box is not None else []
+    def __init__(self, length=0, offset=-1):
+        self.box_id = 'jp2h'
+        self.offset = offset
+        self.length = length
+        self.box = []
 
     @classmethod
     def parse(cls, fptr, offset, length):
@@ -58,8 +62,9 @@ class hvJP2HeaderBox(Jp2kBox):
 
 class hvXMLBox(Jp2kBox):
     def __init__(self, xmlbuf=None, length=0, offset=-1):
-        Jp2kBox.__init__(self, box_id='xml ', offset=offset, length=length,
-                         longname='XML')
+        self.box_id = 'xml '
+        self.offset = offset
+        self.length = length
         self.xmlbuf = xmlbuf
 
     @classmethod
@@ -71,8 +76,9 @@ class hvXMLBox(Jp2kBox):
 
 class hvContiguousCodestreamBox(Jp2kBox):
     def __init__(self, length=0, offset=-1):
-        Jp2kBox.__init__(self, box_id='jp2c', offset=offset, length=length,
-                         longname='Contiguous Codestream')
+        self.box_id = 'jp2c'
+        self.offset = offset
+        self.length = length
 
     @classmethod
     def parse(cls, fptr, offset=0, length=0):
