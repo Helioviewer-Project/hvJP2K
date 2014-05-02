@@ -5,55 +5,47 @@ import struct
 from glymur.jp2box import Jp2kBox
 
 
-class hvJp2k(Jp2kBox):
+class hvJp2k(object):
     def __init__(self, filename):
-        self.offset = 0
-        self.length = os.path.getsize(filename)
-
         with open(filename, 'rb') as fptr:
-            self.box = self.parse_superbox(fptr)
+            self.box = Jp2kBox('', 0, os.path.getsize(filename)).parse_superbox(fptr)
 
 
-class hvJPEG2000SignatureBox(Jp2kBox):
-    def __init__(self, length, offset):
-        self.box_id = 'jP  '
-        self.offset = offset
-        self.length = length
-
+# singleton essentially
+class hvJPEG2000SignatureBox(object):
+    box_id = 'jP  '
     @classmethod
     def parse(cls, fptr, offset, length):
         if fptr.read(4) != b'\x0D\x0A\x87\x0A':
             print('JP2 signature verification failed: ' + fptr.name)
             return None
+        return cls
 
-        return cls(length, offset)
 
-
-class hvFileTypeBox(Jp2kBox):
-    def __init__(self, length, offset):
-        self.box_id = 'ftyp'
-        self.offset = offset
-        self.length = length
-
+# singleton essentially
+class hvFileTypeBox(object):
+    box_id = 'ftyp'
     @classmethod
     def parse(cls, fptr, offset, length):
         if fptr.read(length - 8) != b'\x6A\x70\x32\x20\x00\x00\x00\x00\x6A\x70\x32\x20':
             print('JP2 file type verification failed: ' + fptr.name)
             return None
-
-        return cls(length, offset)
+        return cls
 
 
 class hvJP2HeaderBox(Jp2kBox):
-    def __init__(self, length, offset):
+    def __init__(self, header, length, offset):
         self.box_id = 'jp2h'
         self.offset = offset
         self.length = length
+        self.header = header
         self.box = []
 
     @classmethod
     def parse(cls, fptr, offset, length):
-        return cls(length, offset)
+        # grab entire box
+        fptr.seek(offset)
+        return cls(fptr.read(length), length, offset)
 
     def hv_parse(self, fptr):
         fptr.seek(self.offset + 8)

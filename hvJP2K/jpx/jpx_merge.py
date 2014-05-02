@@ -1,4 +1,5 @@
 
+import os
 import struct
 import sys
 
@@ -13,12 +14,17 @@ from ..jp2.jp2_common import first_box
 from . import jpx_common
 
 # override glymur box parsing
-jp2box._BOX_WITH_ID[b'jP  '] = jpx_common.hvJPEG2000SignatureBox
-jp2box._BOX_WITH_ID[b'ftyp'] = jpx_common.hvFileTypeBox
+jp2box._BOX_WITH_ID[b'jP  '] = jpx_common.hvJPEG2000SignatureBox()
+jp2box._BOX_WITH_ID[b'ftyp'] = jpx_common.hvFileTypeBox()
 jp2box._BOX_WITH_ID[b'jp2h'] = jpx_common.hvJP2HeaderBox
 jp2box._BOX_WITH_ID[b'xml '] = jpx_common.hvXMLBox
 jp2box._BOX_WITH_ID[b'jp2c'] = jpx_common.hvContiguousCodestreamBox
 
+def _first_box(boxes, box_id):
+    for box in boxes:
+        if box.box_id == box_id:
+            return box
+    return None
 
 def write_jpch_jplh(jp2h, jpx):
     # write all boxes, could be optimized
@@ -65,43 +71,44 @@ def jpx_merge(names_in, jpxname, links):
 
     # dtbl stream
     dtbl = BytesIO()
-    dtbl.write(struct.pack('>4sH', b'dtbl', num))
+    dtbl.write(struct.pack('>4sH', b'dtbl', num)) # failed verification ?
 
     head0 = None
 
     for i in range(num):
         jp2name = names_in[i]
-        jp2 = jpx_common.hvJp2k(jp2name)
-
-        # failed JP2 signature or file type verification
-        if jp2.box[0] is None or jp2.box[1] is None:
-            continue
-
-        jp2h = first_box(jp2, 'jp2h')
-        xml_ = first_box(jp2, 'xml ')
-        jp2c = first_box(jp2, 'jp2c')
-
-        if xml_ is not None:
-            # 8 + 16
-            asoc.write(struct.pack('>I4s', 24 + xml_.length, b'asoc'))
-            # 8 + 4 + 4
-            asoc.write(struct.pack('>I4sII', 16, b'nlst', 0x01000000+i, 0x02000000+i))
-            asoc.write(xml_.xmlbuf)
 
         with open(jp2name, 'rb') as ifile:
-            ifile.seek(jp2h.offset)
-            head = ifile.read(jp2h.length)
+            box = jp2box.Jp2kBox('', 0, os.path.getsize(jp2name)).parse_superbox(ifile)
+
+            # failed JP2 signature or file type verification
+            if box[0] is None or box[1] is None:
+                continue
+
+            jp2h = _first_box(box, 'jp2h')
+            xml_ = _first_box(box, 'xml ')
+            jp2c = _first_box(box, 'jp2c')
+
+            # asoc
+            if xml_ is not None:
+                # 8 + 16
+                asoc.write(struct.pack('>I4s', 24 + xml_.length, b'asoc'))
+                # 8 + 4 + 4
+                asoc.write(struct.pack('>I4sII', 16, b'nlst', 0x01000000+i, 0x02000000+i))
+                asoc.write(xml_.xmlbuf)
 
             # first is reference
             if head0 is None:
-                head0 = head
-                # parse to ensure validity
+                # parse jp2h to ensure validity
                 jp2h.hv_parse(ifile)
-                # equivalent to jp2h.write(jpx)
-                jpx.write(head)
+
+                # write jp2h
+                head0 = bytearray(jp2h.header)
+                jpx.write(head0)
+
                 jpx.write(empty_jpch_jplh)
             # identical JP2 header, typical
-            elif head0 == head:
+            elif head0 == jp2h.header:
                 jpx.write(empty_jpch_jplh)
             # different size/colour spec
             else:
@@ -110,14 +117,17 @@ def jpx_merge(names_in, jpxname, links):
                 write_jpch_jplh(jp2h, jpx)
 
             if links:
+                # ftbl
                 jpx.write(ftbl_flst)
                 jpx.write(struct.pack('>QIH', jp2c.offset, jp2c.length, i + 1))
 
+                # dtbl
                 url_ = b'file://' + jp2name.encode() + b'\0'
                 # 8 + 1 + 1 + 1 + 1
                 dtbl.write(struct.pack('>I4sI', 12 + len(url_), b'url ', 0))
                 dtbl.write(url_)
             else:
+                # copy jp2c
                 jp2c.hv_copy(ifile, jpx)
 
     with open(jpxname, 'wb') as ofile:
