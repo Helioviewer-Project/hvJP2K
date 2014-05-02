@@ -98,7 +98,7 @@ def jpx_split(jpxname):
             if xml_ is not None:
                 jp2.write(xml_.xmlbuf)
 
-            jp2c[i].copy(ifile, jp2)
+            jp2c[i].hv_copy(ifile, jp2)
 
             jp2name = '{0:03d}'.format(i) + '.jp2'
             with open(jp2name, 'wb') as ofile:

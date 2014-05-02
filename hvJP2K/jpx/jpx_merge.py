@@ -118,7 +118,7 @@ def jpx_merge(names_in, jpxname, links):
                 dtbl.write(struct.pack('>I4sI', 12 + len(url_), b'url ', 0))
                 dtbl.write(url_)
             else:
-                jp2c.copy(ifile, jpx)
+                jp2c.hv_copy(ifile, jpx)
 
     with open(jpxname, 'wb') as ofile:
         ofile.write(jpx.getvalue())

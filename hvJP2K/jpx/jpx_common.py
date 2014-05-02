@@ -85,7 +85,7 @@ class hvContiguousCodestreamBox(Jp2kBox):
         main_header_offset = fptr.tell()
         return cls(length + offset - main_header_offset, main_header_offset)
 
-    def copy(self, ifile, ofile):
+    def hv_copy(self, ifile, ofile):
         ifile.seek(self.offset)
         ofile.write(struct.pack('>I4s', self.length + 8, b'jp2c'))
         ofile.write(ifile.read(self.length))
