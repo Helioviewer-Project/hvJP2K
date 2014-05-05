@@ -3,6 +3,7 @@ import os
 import struct
 
 from glymur.jp2box import Jp2kBox
+from glymur.codestream import Codestream
 
 
 class hvJp2k(object):
@@ -81,3 +82,7 @@ class hvContiguousCodestreamBox(Jp2kBox):
         ifile.seek(self.offset)
         ofile.write(struct.pack('>I4s', self.length + 8, b'jp2c'))
         ofile.write(ifile.read(self.length))
+
+    def hv_parse(self, fptr):
+        fptr.seek(self.offset)
+        return Codestream(fptr, self.length, header_only=True)
