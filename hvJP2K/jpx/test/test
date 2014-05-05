@@ -20,9 +20,10 @@ function do_test {
         REF=../$1-ref/$i
         SREF=$(file_size $REF)
 
-        CMP=$(cmp -s "$TST" "$REF")
+        cmp -s "$TST" "$REF"
+        local status=$?
         RES=fail
-        if [ $STST == $SREF ] && [ $? -eq 0 ]; then RES=pass; fi
+        if [ $STST == $SREF ] && [ $status -eq 0 ]; then RES=pass; fi
         echo $RES: $i
     done
 

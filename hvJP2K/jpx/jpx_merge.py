@@ -55,9 +55,7 @@ def jpx_merge(names_in, jpxname, links):
     # ftbl with 1 flst with 1 fragment
     ftbl_flst = struct.pack('>I4sI4sH', 8 + 8 + 2 + 14, b'ftbl', 8 + 2 + 14, b'flst', 1)
 
-    # typical pattern of empty jpch, jplh, e.g.
-    # jp2box.CodestreamHeaderBox().write(jpx)
-    # jp2box.CompositingLayerHeaderBox().write(jpx)
+    # typical pattern of empty jpch & jplh
     empty_jpch_jplh = struct.pack('>I4sI4s', 8, b'jpch', 8, b'jplh')
 
     # jpx stream
@@ -103,7 +101,7 @@ def jpx_merge(names_in, jpxname, links):
                 jp2h.hv_parse(ifile)
 
                 # write jp2h
-                head0 = bytearray(jp2h.header)
+                head0 = jp2h.header[:]
                 jpx.write(head0)
 
                 jpx.write(empty_jpch_jplh)
@@ -133,11 +131,11 @@ def jpx_merge(names_in, jpxname, links):
     with open(jpxname, 'wb') as ofile:
         ofile.write(jpx.getvalue())
 
-        # asoc size
-        ofile.write(struct.pack('>I', asoc.tell()))
+        # asoc size + length field
+        ofile.write(struct.pack('>I', asoc.tell() + 4))
         ofile.write(asoc.getvalue())
 
         if links:
-            # dtbl size
-            ofile.write(struct.pack('>I', dtbl.tell()))
+            # dtbl size + length field
+            ofile.write(struct.pack('>I', dtbl.tell() + 4))
             ofile.write(dtbl.getvalue())
