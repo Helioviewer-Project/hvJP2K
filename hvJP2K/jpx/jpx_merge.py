@@ -20,11 +20,6 @@ jp2box._BOX_WITH_ID[b'jp2h'] = jpx_common.hvJP2HeaderBox
 jp2box._BOX_WITH_ID[b'xml '] = jpx_common.hvXMLBox
 jp2box._BOX_WITH_ID[b'jp2c'] = jpx_common.hvContiguousCodestreamBox
 
-def _first_box(boxes, box_id):
-    for box in boxes:
-        if box.box_id == box_id:
-            return box
-    return None
 
 def write_jpch_jplh(jp2h, jpx):
     # write all boxes, could be optimized
@@ -83,9 +78,9 @@ def jpx_merge(names_in, jpxname, links):
             if box[0] is None or box[1] is None:
                 continue
 
-            jp2h = _first_box(box, 'jp2h')
-            xml_ = _first_box(box, 'xml ')
-            jp2c = _first_box(box, 'jp2c')
+            jp2h = first_box(box, 'jp2h')
+            xml_ = first_box(box, 'xml ')
+            jp2c = first_box(box, 'jp2c')
 
             # asoc
             if xml_ is not None:
@@ -112,7 +107,7 @@ def jpx_merge(names_in, jpxname, links):
             else:
                 # enable access to jp2h child boxes
                 jp2h.hv_parse(ifile)
-                write_jpch_jplh(jp2h, jpx)
+                write_jpch_jplh(jp2h.box, jpx)
 
             if links:
                 # ftbl

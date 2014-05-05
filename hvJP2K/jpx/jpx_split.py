@@ -1,4 +1,5 @@
 
+import os
 import sys
 import warnings
 
@@ -22,76 +23,77 @@ def die(msg):
 
 
 def jpx_split(jpxname):
-    jpx = jpx_common.hvJp2k(jpxname)
 
-    ftyp = jpx.box[1]
-    if ftyp.brand != 'jpx ' or 'jp2 ' not in ftyp.compatibility_list:
-        die('The file is not a valid JPX file.')
+    with open(jpxname, 'rb') as ifile:
+        jpx = jp2box.Jp2kBox('', 0, os.path.getsize(jpxname)).parse_superbox(ifile)
 
-    jp2h0 = first_box(jpx, 'jp2h')
-    jp2c = [x for x in jpx.box if x.box_id == 'jp2c']
-    jpch = [x for x in jpx.box if x.box_id == 'jpch']
-    jplh = [x for x in jpx.box if x.box_id == 'jplh']
-    num = len(jp2c)
+        ftyp = jpx[1]
+        if ftyp.brand != 'jpx ' or 'jp2 ' not in ftyp.compatibility_list:
+            die('File is not a valid JPX file: ' + jpxname)
 
-    # enforce a jpch and a jplh for each jp2c
-    if jp2h0 is None or num == 0 or num != len(jpch) or num != len(jplh):
-        die('The file is not a valid JPX file or contains no JP2 codestreams.')
+        jp2h0 = first_box(jpx, 'jp2h')
+        jp2c = [x for x in jpx if x.box_id == 'jp2c']
+        jpch = [x for x in jpx if x.box_id == 'jpch']
+        jplh = [x for x in jpx if x.box_id == 'jplh']
+        num = len(jp2c)
 
-    ihdr0 = first_box(jp2h0, 'ihdr')
-    colr0 = first_box(jp2h0, 'colr')
-    pclr0 = first_box(jp2h0, 'pclr')
-    cmap0 = first_box(jp2h0, 'cmap')
+        # enforce a jpch and a jplh for each jp2c
+        if jp2h0 is None or num == 0 or num != len(jpch) or num != len(jplh):
+            die('The file is not a valid JPX file or contains no JP2 codestreams.')
 
-    def jp2h_boxes(jpch, jplh):
-        # fish for size/colour boxes in jpch and jplh
-        ihdr = first_box(jpch, 'ihdr')
-        pclr = first_box(jpch, 'pclr')
-        cmap = first_box(jpch, 'cmap')
+        jp2h0 = jp2h0.box
+        ihdr0 = first_box(jp2h0, 'ihdr')
+        colr0 = first_box(jp2h0, 'colr')
+        pclr0 = first_box(jp2h0, 'pclr')
+        cmap0 = first_box(jp2h0, 'cmap')
 
-        cgrp = first_box(jplh, 'cgrp')
-        colr = None if cgrp is None else first_box(cgrp, 'colr')
+        def jp2h_boxes(jpch, jplh):
+            # fish for size/colour boxes in jpch and jplh
+            ihdr = first_box(jpch, 'ihdr')
+            pclr = first_box(jpch, 'pclr')
+            cmap = first_box(jpch, 'cmap')
 
-        # replace missing boxes from the main jp2h
-        if ihdr is None: ihdr = ihdr0
-        if colr is None: colr = colr0
-        if pclr is None: pclr = pclr0
-        if cmap is None: cmap = cmap0
+            cgrp = first_box(jplh, 'cgrp')
+            colr = None if cgrp is None else first_box(cgrp.box, 'colr')
 
-        # no mapping or direct mapping
-        if cmap is None or sum(cmap.mapping_type) == 0:
-            pclr = None
-            cmap = None
+            # replace missing boxes from the main jp2h
+            if ihdr is None: ihdr = ihdr0
+            if colr is None: colr = colr0
+            if pclr is None: pclr = pclr0
+            if cmap is None: cmap = cmap0
 
-        return [box for box in (ihdr, colr, pclr, cmap) if box is not None]
+            # no mapping or direct mapping
+            if cmap is None or sum(cmap.mapping_type) == 0:
+                pclr = None
+                cmap = None
 
-    xmls = [None]*num
-    asoc_super = first_box(jpx, 'asoc')
-    if asoc_super is not None:
-        for box in asoc_super.box:
-            if box.box_id == 'asoc':
+            return [box for box in (ihdr, colr, pclr, cmap) if box is not None]
+
+        xmls = [None]*num
+        asoc_super = first_box(jpx, 'asoc')
+        if asoc_super is not None:
+            asoc = [x.box for x in asoc_super.box if x.box_id == 'asoc']
+            for box in asoc:
                 nlst = first_box(box, 'nlst')
                 xml_ = first_box(box, 'xml ')
                 if nlst is None or xml_ is None:
                     continue
 
-                for asoc in nlst.associations:
+                for idx in nlst.associations:
                     # codestream
-                    if (asoc >> 24) == 1:
-                        xmls[asoc & 0x00FFFFFF] = xml_
+                    if (idx >> 24) == 1:
+                        xmls[idx & 0x00FFFFFF] = xml_
 
-    sign = jp2box.JPEG2000SignatureBox()
-    ftyp = jp2box.FileTypeBox()
-    jp2h = jp2box.JP2HeaderBox()
+        sign = jp2box.JPEG2000SignatureBox()
+        ftyp = jp2box.FileTypeBox()
+        jp2h = jp2box.JP2HeaderBox()
 
-    with open(jpxname, 'rb') as ifile:
         for i in range(num):
             jp2 = BytesIO()
-
             sign.write(jp2)
             ftyp.write(jp2)
 
-            jp2h.box = jp2h_boxes(jpch[i], jplh[i])
+            jp2h.box = jp2h_boxes(jpch[i].box, jplh[i].box)
             jp2h.write(jp2)
 
             xml_ = xmls[i]

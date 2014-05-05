@@ -1,6 +1,6 @@
 
-def first_box(sup, box_id):
-    for box in sup.box:
+def first_box(boxes, box_id):
+    for box in boxes:
         if box.box_id == box_id:
             return box
     return None

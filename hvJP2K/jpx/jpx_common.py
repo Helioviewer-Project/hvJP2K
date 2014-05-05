@@ -6,12 +6,6 @@ from glymur.jp2box import Jp2kBox
 from glymur.codestream import Codestream
 
 
-class hvJp2k(object):
-    def __init__(self, filename):
-        with open(filename, 'rb') as fptr:
-            self.box = Jp2kBox('', 0, os.path.getsize(filename)).parse_superbox(fptr)
-
-
 # singleton essentially
 class hvJPEG2000SignatureBox(object):
     box_id = 'jP  '
