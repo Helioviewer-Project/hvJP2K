@@ -47,24 +47,29 @@ def jpx_merge(names_in, jpxname, links):
 
     num = len(names_in)
 
+    struct_pack = struct.pack
+
     # ftbl with 1 flst with 1 fragment
-    ftbl_flst = struct.pack('>I4sI4sH', 8 + 8 + 2 + 14, b'ftbl', 8 + 2 + 14, b'flst', 1)
+    ftbl_flst = struct_pack('>I4sI4sH', 8 + 8 + 2 + 14, b'ftbl', 8 + 2 + 14, b'flst', 1)
 
     # typical pattern of empty jpch & jplh
-    empty_jpch_jplh = struct.pack('>I4sI4s', 8, b'jpch', 8, b'jplh')
+    empty_jpch_jplh = struct_pack('>I4sI4s', 8, b'jpch', 8, b'jplh')
 
     # jpx stream
     jpx = BytesIO()
+    jpx_write = jpx.write
     jp2box.JPEG2000SignatureBox().write(jpx)
     jp2box.FileTypeBox(brand='jpx ', compatibility_list=('jpx ', 'jp2 ', 'jpxb')).write(jpx)
 
     # asoc stream
     asoc = BytesIO()
-    asoc.write(struct.pack('>4s', b'asoc'))
+    asoc_write = asoc.write
+    asoc_write(struct_pack('>4s', b'asoc'))
 
     # dtbl stream
     dtbl = BytesIO()
-    dtbl.write(struct.pack('>4sH', b'dtbl', num)) # failed verification ?
+    dtbl_write = dtbl.write
+    dtbl_write(struct_pack('>4sH', b'dtbl', num)) # failed verification ?
 
     head0 = None
 
@@ -85,40 +90,38 @@ def jpx_merge(names_in, jpxname, links):
             # asoc
             if xml_ is not None:
                 # 8 + 16
-                asoc.write(struct.pack('>I4s', 24 + xml_.length, b'asoc'))
+                asoc_write(struct_pack('>I4s', 24 + xml_.length, b'asoc'))
                 # 8 + 4 + 4
-                asoc.write(struct.pack('>I4sII', 16, b'nlst', 0x01000000+i, 0x02000000+i))
-                asoc.write(xml_.xmlbuf)
+                asoc_write(struct_pack('>I4sII', 16, b'nlst', 0x01000000+i, 0x02000000+i))
+                asoc_write(xml_.xmlbuf)
 
-            # first is reference
-            if head0 is None:
-                # parse jp2h to ensure validity
-                jp2h.hv_parse(ifile)
-
-                # write jp2h
-                head0 = jp2h.header[:]
-                jpx.write(head0)
-
-                jpx.write(empty_jpch_jplh)
             # identical JP2 header, typical
-            elif head0 == jp2h.header:
-                jpx.write(empty_jpch_jplh)
-            # different size/colour spec
+            if head0 == jp2h.header:
+                jpx_write(empty_jpch_jplh)
             else:
-                # enable access to jp2h child boxes
-                jp2h.hv_parse(ifile)
-                write_jpch_jplh(jp2h.box, jpx)
+                # parse jp2h for validity/access to child boxes
+                jp2h_box = jp2h.hv_parse(ifile)
+
+                # first is reference
+                if head0 is None:
+                    head0 = jp2h.header[:]
+                    # write jp2h
+                    jpx_write(head0)
+                    jpx_write(empty_jpch_jplh)
+                # different size/colour spec
+                else:
+                    write_jpch_jplh(jp2h_box, jpx)
 
             if links:
                 # ftbl
-                jpx.write(ftbl_flst)
-                jpx.write(struct.pack('>QIH', jp2c.offset, jp2c.length, i + 1))
+                jpx_write(ftbl_flst)
+                jpx_write(struct_pack('>QIH', jp2c.offset, jp2c.length, i + 1))
 
                 # dtbl
                 url_ = b'file://' + jp2name.encode() + b'\0'
                 # 8 + 1 + 1 + 1 + 1
-                dtbl.write(struct.pack('>I4sI', 12 + len(url_), b'url ', 0))
-                dtbl.write(url_)
+                dtbl_write(struct_pack('>I4sI', 12 + len(url_), b'url ', 0))
+                dtbl_write(url_)
             else:
                 # copy jp2c
                 jp2c.hv_copy(ifile, jpx)
@@ -127,10 +130,10 @@ def jpx_merge(names_in, jpxname, links):
         ofile.write(jpx.getvalue())
 
         # asoc size + length field
-        ofile.write(struct.pack('>I', asoc.tell() + 4))
+        ofile.write(struct_pack('>I', asoc.tell() + 4))
         ofile.write(asoc.getvalue())
 
         if links:
             # dtbl size + length field
-            ofile.write(struct.pack('>I', dtbl.tell() + 4))
+            ofile.write(struct_pack('>I', dtbl.tell() + 4))
             ofile.write(dtbl.getvalue())

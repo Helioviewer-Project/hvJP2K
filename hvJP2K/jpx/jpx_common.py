@@ -28,13 +28,12 @@ class hvFileTypeBox(object):
         return cls
 
 
-class hvJP2HeaderBox(Jp2kBox):
+class hvJP2HeaderBox(object):
+    box_id = 'jp2h'
     def __init__(self, header, length, offset):
-        self.box_id = 'jp2h'
         self.offset = offset
         self.length = length
         self.header = header
-        self.box = []
 
     @classmethod
     def parse(cls, fptr, offset, length):
@@ -44,12 +43,12 @@ class hvJP2HeaderBox(Jp2kBox):
 
     def hv_parse(self, fptr):
         fptr.seek(self.offset + 8)
-        self.box = self.parse_superbox(fptr)
+        return Jp2kBox('jp2h', self.offset, self.length).parse_superbox(fptr)
 
 
-class hvXMLBox(Jp2kBox):
+class hvXMLBox(object):
+    box_id = 'xml '
     def __init__(self, xmlbuf, length, offset):
-        self.box_id = 'xml '
         self.offset = offset
         self.length = length
         self.xmlbuf = xmlbuf
@@ -61,9 +60,9 @@ class hvXMLBox(Jp2kBox):
         return cls(fptr.read(length), length, offset)
 
 
-class hvContiguousCodestreamBox(Jp2kBox):
+class hvContiguousCodestreamBox(object):
+    box_id = 'jp2c'
     def __init__(self, length, offset):
-        self.box_id = 'jp2c'
         self.offset = offset
         self.length = length
 

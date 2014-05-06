@@ -14,6 +14,7 @@ from ..jp2.jp2_common import first_box
 from . import jpx_common
 
 # override some glymur box parsing
+jp2box._BOX_WITH_ID[b'jp2h'] = jpx_common.hvJP2HeaderBox
 jp2box._BOX_WITH_ID[b'xml '] = jpx_common.hvXMLBox
 jp2box._BOX_WITH_ID[b'jp2c'] = jpx_common.hvContiguousCodestreamBox
 
@@ -41,7 +42,7 @@ def jpx_split(jpxname):
         if jp2h0 is None or num == 0 or num != len(jpch) or num != len(jplh):
             die('The file is not a valid JPX file or contains no JP2 codestreams.')
 
-        jp2h0 = jp2h0.box
+        jp2h0 = jp2h0.hv_parse(ifile)
         ihdr0 = first_box(jp2h0, 'ihdr')
         colr0 = first_box(jp2h0, 'colr')
         pclr0 = first_box(jp2h0, 'pclr')
@@ -82,7 +83,7 @@ def jpx_split(jpxname):
                 for idx in nlst.associations:
                     # codestream
                     if (idx >> 24) == 1:
-                        xmls[idx & 0x00FFFFFF] = xml_
+                        xmls[idx & 0x00FFFFFF] = xml_.xmlbuf
 
         sign = jp2box.JPEG2000SignatureBox()
         ftyp = jp2box.FileTypeBox()
@@ -96,9 +97,8 @@ def jpx_split(jpxname):
             jp2h.box = jp2h_boxes(jpch[i].box, jplh[i].box)
             jp2h.write(jp2)
 
-            xml_ = xmls[i]
-            if xml_ is not None:
-                jp2.write(xml_.xmlbuf)
+            if xmls[i] is not None:
+                jp2.write(xmls[i])
 
             jp2c[i].hv_copy(ifile, jp2)
 
