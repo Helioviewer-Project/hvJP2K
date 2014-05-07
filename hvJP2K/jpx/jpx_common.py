@@ -1,10 +1,87 @@
 
 import os
 import struct
+import warnings
 
-from glymur.jp2box import Jp2kBox
+from glymur.jp2box import Jp2kBox, _BOX_WITH_ID, UnknownBox
 from glymur.codestream import Codestream
 
+def hv_parse_this_box(fptr, box_id, start, num_bytes):
+    try:
+        parser = _BOX_WITH_ID[box_id].parse
+    except KeyError:
+        # We don't recognize the box ID, so create an UnknownBox and be
+        # done with it.
+        msg = 'Unrecognized box ({0}) encountered.'.format(box_id)
+        warnings.warn(msg)
+        return UnknownBox(box_id, offset=start, length=num_bytes)
+
+    try:
+        box = parser(fptr, start, num_bytes)
+    except ValueError as err:
+        msg = "Encountered an unrecoverable ValueError while parsing a {0} "
+        msg += "box at byte offset {1}.  The original error message was "
+        msg += "\"{2}\""
+        msg = msg.format(box_id.decode('utf-8'), start, str(err))
+        warnings.warn(msg, UserWarning)
+        box = UnknownBox(box_id.decode('utf-8'), length=num_bytes, offset=start)
+
+    return box
+
+def hv_parse_superbox(fptr, offset, length):
+
+    superbox = []
+
+    start = fptr.tell()
+
+    while True:
+
+        # Are we at the end of the superbox?
+        if start >= offset + length:
+            break
+
+        read_buffer = fptr.read(8)
+        if len(read_buffer) < 8:
+            msg = "Extra bytes at end of file ignored."
+            warnings.warn(msg)
+            return superbox
+
+        (box_length, box_id) = struct.unpack('>I4s', read_buffer)
+        if box_length == 0:
+            # The length of the box is presumed to last until the end of
+            # the file.  Compute the effective length of the box.
+            num_bytes = os.path.getsize(fptr.name) - fptr.tell() + 8
+
+        elif box_length == 1:
+            # The length of the box is in the XL field, a 64-bit value.
+            read_buffer = fptr.read(8)
+            num_bytes, = struct.unpack('>Q', read_buffer)
+
+        else:
+            # The box_length value really is the length of the box!
+            num_bytes = box_length
+
+        superbox.append(hv_parse_this_box(fptr, box_id, start, num_bytes))
+
+        # Position to the start of the next box.
+        start += num_bytes
+
+        if num_bytes > length:
+            # Length of the current box goes past the end of the
+            # enclosing superbox.
+            msg = '{0} box has incorrect box length ({1})'
+            msg = msg.format(box_id, num_bytes)
+            warnings.warn(msg)
+        elif fptr.tell() > start:
+            # The box must be invalid somehow, as the file pointer is
+            # positioned past the end of the box.
+            msg = '{0} box may be invalid, the file pointer is positioned '
+            msg += '{1} bytes past the end of the box.'
+            msg = msg.format(box_id, fptr.tell() - start)
+            warnings.warn(msg)
+        fptr.seek(start)
+
+    return superbox
 
 # singleton essentially
 class hvJPEG2000SignatureBox(object):
@@ -43,7 +120,7 @@ class hvJP2HeaderBox(object):
 
     def hv_parse(self, fptr):
         fptr.seek(self.offset + 8)
-        return Jp2kBox('jp2h', self.offset, self.length).parse_superbox(fptr)
+        return hv_parse_superbox(fptr, self.offset, self.length)
 
 
 class hvXMLBox(object):

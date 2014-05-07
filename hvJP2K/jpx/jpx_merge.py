@@ -77,7 +77,7 @@ def jpx_merge(names_in, jpxname, links):
         jp2name = names_in[i]
 
         with open(jp2name, 'rb') as ifile:
-            box = jp2box.Jp2kBox('', 0, os.path.getsize(jp2name)).parse_superbox(ifile)
+            box = jpx_common.hv_parse_superbox(ifile, 0, os.path.getsize(jp2name))
 
             # failed JP2 signature or file type verification
             if box[0] is None or box[1] is None:

@@ -26,7 +26,7 @@ def die(msg):
 def jpx_split(jpxname):
 
     with open(jpxname, 'rb') as ifile:
-        jpx = jp2box.Jp2kBox('', 0, os.path.getsize(jpxname)).parse_superbox(ifile)
+        jpx = jpx_common.hv_parse_superbox(ifile, 0, os.path.getsize(jpxname))
 
         ftyp = jpx[1]
         if ftyp.brand != 'jpx ' or 'jp2 ' not in ftyp.compatibility_list:
