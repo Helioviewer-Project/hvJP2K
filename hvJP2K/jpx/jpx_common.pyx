@@ -6,22 +6,17 @@ import warnings
 from glymur.jp2box import Jp2kBox, _BOX_WITH_ID, UnknownBox
 from glymur.codestream import Codestream
 
-from libc.stdint cimport uint32_t, uint64_t
-cdef extern from "arpa/inet.h":
-    uint32_t ntohl(uint32_t)
+from libc.stdint cimport uint32_t
 
 cdef hv_parse_this_box(fptr, bytes box_id, uint32_t start, uint32_t num_bytes):
     try:
         parser = _BOX_WITH_ID[box_id].parse
     except KeyError:
-        try:
-            parser = _BOX_WITH_ID[box_id].parse
-        except KeyError:
-            # We don't recognize the box ID, so create an UnknownBox and be
-            # done with it.
-            msg = 'Unrecognized box ({0}) encountered.'.format(box_id)
-            warnings.warn(msg)
-            return UnknownBox(box_id, offset=start, length=num_bytes)
+        # We don't recognize the box ID, so create an UnknownBox and be
+        # done with it.
+        msg = 'Unrecognized box ({0}) encountered.'.format(box_id)
+        warnings.warn(msg)
+        return UnknownBox(box_id, offset=start, length=num_bytes)
 
     try:
         box = parser(fptr, start, num_bytes)
@@ -125,17 +120,17 @@ cdef class hvJP2HeaderBox(object):
     cdef public uint32_t length
     cdef public bytes header
 
-    def __init__(self, header, length, offset):
+    @staticmethod
+    def parse(fptr, uint32_t offset, uint32_t length):
+        # grab entire box
+        fptr.seek(offset)
+
+        cdef hvJP2HeaderBox self = hvJP2HeaderBox.__new__(hvJP2HeaderBox)
         self.box_id = 'jp2h'
         self.offset = offset
         self.length = length
-        self.header = header
-
-    @classmethod
-    def parse(cls, fptr, offset, length):
-        # grab entire box
-        fptr.seek(offset)
-        return cls(fptr.read(length), length, offset)
+        self.header = fptr.read(length)
+        return self
 
     def hv_parse(self, fptr):
         fptr.seek(self.offset + 8)
@@ -148,17 +143,17 @@ cdef class hvXMLBox(object):
     cdef public uint32_t length
     cdef public bytes xmlbuf
 
-    def __init__(self, xmlbuf, length, offset):
+    @staticmethod
+    def parse(fptr, uint32_t offset, uint32_t length):
+        # grab entire box
+        fptr.seek(offset)
+
+        cdef hvXMLBox self = hvXMLBox.__new__(hvXMLBox)
         self.box_id = 'xml '
         self.offset = offset
         self.length = length
-        self.xmlbuf = xmlbuf
-
-    @classmethod
-    def parse(cls, fptr, offset, length):
-        # grab entire box
-        fptr.seek(offset)
-        return cls(fptr.read(length), length, offset)
+        self.xmlbuf = fptr.read(length)
+        return self
 
 
 cdef class hvContiguousCodestreamBox(object):
@@ -166,15 +161,15 @@ cdef class hvContiguousCodestreamBox(object):
     cdef public uint32_t offset
     cdef public uint32_t length
 
-    def __init__(self, length, offset):
-        self.box_id = 'jp2c'
-        self.offset = offset
-        self.length = length
+    @staticmethod
+    def parse(fptr, uint32_t offset, uint32_t length):
+        cdef uint32_t main_header_offset = fptr.tell()
 
-    @classmethod
-    def parse(cls, fptr, offset, length):
-        main_header_offset = fptr.tell()
-        return cls(length + offset - main_header_offset, main_header_offset)
+        cdef hvContiguousCodestreamBox self = hvContiguousCodestreamBox.__new__(hvContiguousCodestreamBox)
+        self.box_id = 'jp2c'
+        self.offset = main_header_offset
+        self.length = length + offset - main_header_offset
+        return self
 
     def hv_copy(self, ifile, ofile):
         ifile.seek(self.offset)
