@@ -56,7 +56,7 @@ def jpx_merge(names_in, jpxname, links):
     empty_jpch_jplh = struct_pack('>I4sI4s', 8, b'jpch', 8, b'jplh')
 
     # jpx stream
-    jpx = BytesIO()
+    jpx = open(jpxname, 'wb')
     jpx_write = jpx.write
     jp2box.JPEG2000SignatureBox().write(jpx)
     jp2box.FileTypeBox(brand='jpx ', compatibility_list=('jpx ', 'jp2 ', 'jpxb')).write(jpx)
@@ -126,14 +126,13 @@ def jpx_merge(names_in, jpxname, links):
                 # copy jp2c
                 jp2c.hv_copy(ifile, jpx)
 
-    with open(jpxname, 'wb') as ofile:
-        ofile.write(jpx.getvalue())
+    # asoc size + length field
+    jpx_write(struct_pack('>I', asoc.tell() + 4))
+    jpx_write(asoc.getvalue())
 
-        # asoc size + length field
-        ofile.write(struct_pack('>I', asoc.tell() + 4))
-        ofile.write(asoc.getvalue())
+    if links:
+        # dtbl size + length field
+        jpx_write(struct_pack('>I', dtbl.tell() + 4))
+        jpx_write(dtbl.getvalue())
 
-        if links:
-            # dtbl size + length field
-            ofile.write(struct_pack('>I', dtbl.tell() + 4))
-            ofile.write(dtbl.getvalue())
+    jpx.close()
