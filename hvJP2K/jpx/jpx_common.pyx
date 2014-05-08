@@ -1,4 +1,9 @@
 
+# cython: profile=False
+# cython: infer_types=True
+# cython: boundscheck=False
+# cython: wraparound=False
+
 import os
 import struct
 import warnings
@@ -6,10 +11,13 @@ import warnings
 from glymur.jp2box import Jp2kBox, _BOX_WITH_ID, UnknownBox
 from glymur.codestream import Codestream
 
+from libc.stdint cimport uint32_t, uint64_t
+cdef extern from "arpa/inet.h":
+    uint32_t ntohl(uint32_t)
+
+cdef dict BOX_WITH_ID = _BOX_WITH_ID
 
 cdef object hv_parse_this_box(fptr, bytes box_id, int start, int num_bytes):
-    cdef dict BOX_WITH_ID = _BOX_WITH_ID
-
     try:
         parser = BOX_WITH_ID[box_id].parse
     except KeyError:
@@ -36,15 +44,18 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
 
     cdef int box_length, num_bytes, cur_pos, start
     cdef bytes read_buffer, box_id
+    cdef const char *c_read_buffer
 
     fptr_read = fptr.read
     fptr_seek = fptr.seek
     fptr_tell = fptr.tell
-    struct_unpack = struct.unpack
 
     superbox = []
 
-    start = fptr_tell()
+    if offset == 0:
+        start = 0
+    else:
+        start = fptr_tell()
 
     while True:
 
@@ -58,7 +69,11 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
             warnings.warn(msg)
             return superbox
 
-        (box_length, box_id) = struct_unpack('>I4s', read_buffer)
+        # fix big endian
+        # (box_length, box_id) = struct_unpack('>I4s', read_buffer)
+        c_read_buffer = read_buffer
+        box_length = ntohl((<uint32_t *> c_read_buffer)[0])
+        box_id = c_read_buffer + 4
 
         if box_length == 0:
             # The length of the box is presumed to last until the end of
@@ -69,7 +84,7 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
         elif box_length == 1:
             # The length of the box is in the XL field, a 64-bit value.
             read_buffer = fptr_read(8)
-            num_bytes, = struct_unpack('>Q', read_buffer)
+            num_bytes, = struct.unpack('>Q', read_buffer)
         else:
             # The box_length value really is the length of the box!
             num_bytes = box_length
@@ -86,6 +101,8 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
             msg = '{0} box has incorrect box length ({1})'
             msg = msg.format(box_id, num_bytes)
             warnings.warn(msg)
+        elif cur_pos == start:
+            continue
         elif cur_pos > start:
             # The box must be invalid somehow, as the file pointer is
             # positioned past the end of the box.
