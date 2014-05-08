@@ -37,9 +37,14 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
     cdef int box_length, num_bytes, cur_pos, start
     cdef bytes read_buffer, box_id
 
+    fptr_read = fptr.read
+    fptr_seek = fptr.seek
+    fptr_tell = fptr.tell
+    struct_unpack = struct.unpack
+
     superbox = []
 
-    start = fptr.tell()
+    start = fptr_tell()
 
     while True:
 
@@ -47,13 +52,13 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
         if start >= offset + length:
             break
 
-        read_buffer = fptr.read(8)
+        read_buffer = fptr_read(8)
         if len(read_buffer) < 8:
             msg = "Extra bytes at end of file ignored."
             warnings.warn(msg)
             return superbox
 
-        (box_length, box_id) = struct.unpack('>I4s', read_buffer)
+        (box_length, box_id) = struct_unpack('>I4s', read_buffer)
 
         if box_length == 0:
             # The length of the box is presumed to last until the end of
@@ -63,8 +68,8 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
 
         elif box_length == 1:
             # The length of the box is in the XL field, a 64-bit value.
-            read_buffer = fptr.read(8)
-            num_bytes, = struct.unpack('>Q', read_buffer)
+            read_buffer = fptr_read(8)
+            num_bytes, = struct_unpack('>Q', read_buffer)
         else:
             # The box_length value really is the length of the box!
             num_bytes = box_length
@@ -73,7 +78,7 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
 
         # Position to the start of the next box.
         start += num_bytes
-        cur_pos = fptr.tell()
+        cur_pos = fptr_tell()
 
         if num_bytes > length:
             # Length of the current box goes past the end of the
@@ -89,7 +94,7 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
             msg = msg.format(box_id, cur_pos - start)
             warnings.warn(msg)
 
-        fptr.seek(start)
+        fptr_seek(start)
 
     return superbox
 
@@ -134,7 +139,7 @@ cdef class hvJP2HeaderBox(object):
         self.header = fptr.read(length)
         return self
 
-    cpdef hv_parse(self, fptr):
+    cpdef list hv_parse(self, fptr):
         fptr.seek(self.offset + 8)
         return hv_parse_superbox(fptr, self.offset, self.length)
 
@@ -178,6 +183,6 @@ cdef class hvContiguousCodestreamBox(object):
         ofile.write(struct.pack('>I4s', self.length + 8, b'jp2c'))
         ofile.write(ifile.read(self.length))
 
-    cpdef hv_parse(self, fptr):
+    cpdef object hv_parse(self, fptr):
         fptr.seek(self.offset)
         return Codestream(fptr, self.length, header_only=True)
