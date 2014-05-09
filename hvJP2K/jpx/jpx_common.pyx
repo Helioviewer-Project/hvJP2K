@@ -12,6 +12,7 @@ from glymur.jp2box import Jp2kBox, _BOX_WITH_ID, UnknownBox
 from glymur.codestream import Codestream
 
 from libc.stdint cimport uint32_t, uint64_t
+from cpython.bytes cimport PyBytes_GET_SIZE, PyBytes_AsString, PyBytes_FromString
 cdef extern from "arpa/inet.h":
     uint32_t ntohl(uint32_t)
 
@@ -61,26 +62,26 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
 
         # Are we at the end of the superbox?
         if start >= offset + length:
-            break
+            return superbox
 
         read_buffer = fptr_read(8)
-        if len(read_buffer) < 8:
+        if PyBytes_GET_SIZE(read_buffer) < 8:
             msg = "Extra bytes at end of file ignored."
             warnings.warn(msg)
             return superbox
 
-        # fix big endian
         # (box_length, box_id) = struct_unpack('>I4s', read_buffer)
-        c_read_buffer = read_buffer
+        c_read_buffer = PyBytes_AsString(read_buffer)
         box_length = ntohl((<uint32_t *> c_read_buffer)[0])
-        box_id = c_read_buffer + 4
+        box_id = PyBytes_FromString(c_read_buffer + 4)
 
         if box_length == 0:
             # The length of the box is presumed to last until the end of
             # the file.  Compute the effective length of the box.
             # num_bytes = os.path.getsize(fptr.name) - fptr.tell() + 8
-            num_bytes = length - start # length + 8 - (start + 8)
 
+            # !!! does not work if not top level box, unlikely
+            num_bytes = length - start # length - (start + 8) + 8
         elif box_length == 1:
             # The length of the box is in the XL field, a 64-bit value.
             read_buffer = fptr_read(8)
@@ -90,6 +91,10 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
             num_bytes = box_length
 
         superbox.append(hv_parse_this_box(fptr, box_id, start, num_bytes))
+
+        if box_length == 0:
+            # We're done, box lasted until the end of the file.
+            return superbox
 
         # Position to the start of the next box.
         start += num_bytes
@@ -102,6 +107,7 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
             msg = msg.format(box_id, num_bytes)
             warnings.warn(msg)
         elif cur_pos == start:
+            # At the start of the next box, jump to it.
             continue
         elif cur_pos > start:
             # The box must be invalid somehow, as the file pointer is
