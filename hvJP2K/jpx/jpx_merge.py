@@ -4,14 +4,10 @@
 # cython: boundscheck=False
 # cython: wraparound=False
 
-import os
+from io import BytesIO
+from os import stat
 import struct
 import sys
-
-if sys.hexversion >= 0x03000000:
-    from io import BytesIO
-else:
-    from cStringIO import StringIO as BytesIO
 
 from glymur import jp2box
 
@@ -82,7 +78,7 @@ def jpx_merge(names_in, jpxname, links):
         jp2name = names_in[i]
 
         with open(jp2name, 'rb') as ifile:
-            box = jpx_common.hv_parse_superbox(ifile, 0, os.stat(jp2name).st_size)
+            box = jpx_common.hv_parse_superbox(ifile, 0, stat(jp2name).st_size)
 
             # failed JP2 signature or file type verification
             if box[0] is None or box[1] is None:

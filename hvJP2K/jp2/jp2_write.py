@@ -1,14 +1,10 @@
 
+from io import BytesIO
 import os
 import sys
 import ctypes
 import struct
 import warnings
-
-if sys.hexversion >= 0x03000000:
-    from io import BytesIO
-else:
-    from cStringIO import StringIO as BytesIO
 
 # Exitstack not found in contextlib in 2.7
 # pylint: disable=E0611

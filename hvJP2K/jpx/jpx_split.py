@@ -1,12 +1,8 @@
 
-import os
+from io import BytesIO
+from os import stat
 import sys
 import warnings
-
-if sys.hexversion >= 0x03000000:
-    from io import BytesIO
-else:
-    from cStringIO import StringIO as BytesIO
 
 from glymur import jp2box
 
@@ -26,7 +22,7 @@ def die(msg):
 def jpx_split(jpxname):
 
     with open(jpxname, 'rb') as ifile:
-        jpx = jpx_common.hv_parse_superbox(ifile, 0, os.stat(jpxname).st_size)
+        jpx = jpx_common.hv_parse_superbox(ifile, 0, stat(jpxname).st_size)
 
         ftyp = jpx[1]
         if ftyp.brand != 'jpx ' or 'jp2 ' not in ftyp.compatibility_list:
