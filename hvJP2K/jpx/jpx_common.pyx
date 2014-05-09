@@ -11,14 +11,17 @@ import warnings
 from glymur.jp2box import Jp2kBox, _BOX_WITH_ID, UnknownBox
 from glymur.codestream import Codestream
 
+cimport cython
+
 from libc.stdint cimport uint32_t, uint64_t
 from cpython.bytes cimport PyBytes_GET_SIZE, PyBytes_AS_STRING, PyBytes_FromString
 cdef extern from 'arpa/inet.h':
     uint32_t ntohl(uint32_t)
 
-cdef dict BOX_WITH_ID = _BOX_WITH_ID
 
-cdef object hv_parse_this_box(fptr, bytes box_id, int start, int num_bytes):
+cdef dict BOX_WITH_ID = <dict> _BOX_WITH_ID
+
+cdef object hv_parse_this_box(fptr, bytes box_id, Py_ssize_t start, Py_ssize_t num_bytes):
     try:
         parser = BOX_WITH_ID[box_id].parse
     except KeyError:
@@ -40,9 +43,9 @@ cdef object hv_parse_this_box(fptr, bytes box_id, int start, int num_bytes):
     return box
 
 
-cpdef list hv_parse_superbox(fptr, int offset, int length):
+cpdef list hv_parse_superbox(fptr, Py_ssize_t offset, Py_ssize_t length):
 
-    cdef int box_length, num_bytes, cur_pos, start
+    cdef Py_ssize_t box_length, num_bytes, cur_pos, start
     cdef bytes read_buffer, box_id
     cdef const char *c_read_buffer
 
@@ -50,8 +53,9 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
     fptr_seek = fptr.seek
     fptr_tell = fptr.tell
 
-    superbox = []
+    cdef list superbox = []
 
+    # start = fptr.tell()
     if offset == 0:
         start = 0
     else:
@@ -61,9 +65,10 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
 
         # Are we at the end of the superbox?
         if start >= offset + length:
+            # break
             return superbox
 
-        read_buffer = fptr_read(8)
+        read_buffer = <bytes> fptr_read(8)
         if PyBytes_GET_SIZE(read_buffer) < 8:
             msg = 'Extra bytes at end of file ignored.'
             warnings.warn(msg)
@@ -79,11 +84,11 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
             # the file.  Compute the effective length of the box.
             # num_bytes = os.path.getsize(fptr.name) - fptr.tell() + 8
 
-            # !!! does not work if not top level box, unlikely
+            # !!! does not work if not top level box, unlikely to occur
             num_bytes = length - start # length - (start + 8) + 8
         elif box_length == 1:
             # The length of the box is in the XL field, a 64-bit value.
-            read_buffer = fptr_read(8)
+            read_buffer = <bytes> fptr_read(8)
             num_bytes, = struct.unpack('>Q', read_buffer)
         else:
             # The box_length value really is the length of the box!
@@ -122,43 +127,50 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
 
 
 # singleton essentially
+@cython.freelist(4)
 cdef class hvJPEG2000SignatureBox(object):
     box_id = 'jP  '
     @classmethod
-    def parse(cls, fptr, offset, length):
-        if fptr.read(4) != b'\x0D\x0A\x87\x0A':
-            print('JP2 signature verification failed: ' + fptr.name)
+    def parse(cls, fptr, Py_ssize_t offset, Py_ssize_t length):
+        cdef bytes read_buffer = <bytes> fptr.read(4)
+        if read_buffer != b'\x0D\x0A\x87\x0A':
+            msg = 'JP2 signature verification failed for file {0}.'.format(fptr.name)
+            warnings.warn(msg)
             return None
         return cls
 
 
 # singleton essentially
+@cython.freelist(4)
 cdef class hvFileTypeBox(object):
     box_id = 'ftyp'
     @classmethod
-    def parse(cls, fptr, offset, length):
-        if fptr.read(length - 8) != b'\x6A\x70\x32\x20\x00\x00\x00\x00\x6A\x70\x32\x20':
-            print('JP2 file type verification failed: ' + fptr.name)
+    def parse(cls, fptr, Py_ssize_t offset, Py_ssize_t length):
+        cdef bytes read_buffer = <bytes> fptr.read(length - 8)
+        if read_buffer != b'\x6A\x70\x32\x20\x00\x00\x00\x00\x6A\x70\x32\x20':
+            msg = 'JP2 file type verification failed for file {0}.'.format(fptr.name)
+            warnings.warn(msg)
             return None
         return cls
 
 
+@cython.freelist(4)
 cdef class hvJP2HeaderBox(object):
-    cdef public str box_id
-    cdef public int offset
-    cdef public int length
-    cdef public bytes header
+    cdef readonly str box_id
+    cdef readonly Py_ssize_t offset
+    cdef readonly Py_ssize_t length
+    cdef readonly bytes header
 
     @staticmethod
-    def parse(fptr, int offset, int length):
+    def parse(fptr, Py_ssize_t offset, Py_ssize_t length):
         # grab entire box
         fptr.seek(offset)
 
-        cdef hvJP2HeaderBox self = hvJP2HeaderBox.__new__(hvJP2HeaderBox)
+        cdef hvJP2HeaderBox self = <hvJP2HeaderBox> hvJP2HeaderBox.__new__(hvJP2HeaderBox)
         self.box_id = 'jp2h'
         self.offset = offset
         self.length = length
-        self.header = fptr.read(length)
+        self.header = <bytes> fptr.read(length)
         return self
 
     cpdef list hv_parse(self, fptr):
@@ -166,35 +178,37 @@ cdef class hvJP2HeaderBox(object):
         return hv_parse_superbox(fptr, self.offset, self.length)
 
 
+@cython.freelist(4)
 cdef class hvXMLBox(object):
-    cdef public str box_id
-    cdef public int offset
-    cdef public int length
-    cdef public bytes xmlbuf
+    cdef readonly str box_id
+    cdef readonly Py_ssize_t offset
+    cdef readonly Py_ssize_t length
+    cdef readonly bytes xmlbuf
 
     @staticmethod
-    def parse(fptr, int offset, int length):
+    def parse(fptr, Py_ssize_t offset, Py_ssize_t length):
         # grab entire box
         fptr.seek(offset)
 
-        cdef hvXMLBox self = hvXMLBox.__new__(hvXMLBox)
+        cdef hvXMLBox self = <hvXMLBox> hvXMLBox.__new__(hvXMLBox)
         self.box_id = 'xml '
         self.offset = offset
         self.length = length
-        self.xmlbuf = fptr.read(length)
+        self.xmlbuf = <bytes> fptr.read(length)
         return self
 
 
+@cython.freelist(4)
 cdef class hvContiguousCodestreamBox(object):
-    cdef public str box_id
-    cdef public int offset
-    cdef public int length
+    cdef readonly str box_id
+    cdef readonly Py_ssize_t offset
+    cdef readonly Py_ssize_t length
 
     @staticmethod
-    def parse(fptr, int offset, int length):
-        cdef int main_header_offset = fptr.tell()
+    def parse(fptr, Py_ssize_t offset, Py_ssize_t length):
+        cdef Py_ssize_t main_header_offset = fptr.tell()
 
-        cdef hvContiguousCodestreamBox self = hvContiguousCodestreamBox.__new__(hvContiguousCodestreamBox)
+        cdef hvContiguousCodestreamBox self = <hvContiguousCodestreamBox> hvContiguousCodestreamBox.__new__(hvContiguousCodestreamBox)
         self.box_id = 'jp2c'
         self.offset = main_header_offset
         self.length = length + offset - main_header_offset

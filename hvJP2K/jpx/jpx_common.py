@@ -1,4 +1,9 @@
 
+# cython: profile=False
+# cython: infer_types=True
+# cython: boundscheck=False
+# cython: wraparound=False
+
 import os
 import struct
 import warnings
@@ -19,30 +24,39 @@ def hv_parse_this_box(fptr, box_id, start, num_bytes):
     try:
         box = parser(fptr, start, num_bytes)
     except ValueError as err:
-        msg = "Encountered an unrecoverable ValueError while parsing a {0} "
-        msg += "box at byte offset {1}.  The original error message was "
-        msg += "\"{2}\""
+        msg = ('Encountered an unrecoverable ValueError while parsing a {0} '
+              'box at byte offset {1}.  The original error message was "{2}"')
         msg = msg.format(box_id.decode('utf-8'), start, str(err))
         warnings.warn(msg, UserWarning)
         box = UnknownBox(box_id.decode('utf-8'), length=num_bytes, offset=start)
 
     return box
 
+# @profile
 def hv_parse_superbox(fptr, offset, length):
+
+    fptr_read = fptr.read
+    fptr_seek = fptr.seek
+    fptr_tell = fptr.tell
 
     superbox = []
 
-    start = fptr.tell()
+    # start = fptr.tell()
+    if offset == 0:
+        start = 0
+    else:
+        start = fptr_tell()
 
     while True:
 
         # Are we at the end of the superbox?
         if start >= offset + length:
-            break
+            # break
+            return superbox
 
-        read_buffer = fptr.read(8)
+        read_buffer = fptr_read(8)
         if len(read_buffer) < 8:
-            msg = "Extra bytes at end of file ignored."
+            msg = 'Extra bytes at end of file ignored.'
             warnings.warn(msg)
             return superbox
 
@@ -50,21 +64,28 @@ def hv_parse_superbox(fptr, offset, length):
         if box_length == 0:
             # The length of the box is presumed to last until the end of
             # the file.  Compute the effective length of the box.
-            num_bytes = os.path.getsize(fptr.name) - fptr.tell() + 8
+            # num_bytes = os.path.getsize(fptr.name) - fptr.tell() + 8
 
+            # !!! does not work if not top level box, unlikely to occur
+            num_bytes = length - start # length - (start + 8) + 8
         elif box_length == 1:
             # The length of the box is in the XL field, a 64-bit value.
-            read_buffer = fptr.read(8)
+            read_buffer = fptr_read(8)
             num_bytes, = struct.unpack('>Q', read_buffer)
-
         else:
             # The box_length value really is the length of the box!
             num_bytes = box_length
 
-        superbox.append(hv_parse_this_box(fptr, box_id, start, num_bytes))
+        box = hv_parse_this_box(fptr, box_id, start, num_bytes)
+        superbox.append(box)
+
+        if box_length == 0:
+            # We're done, box lasted until the end of the file.
+            return superbox
 
         # Position to the start of the next box.
         start += num_bytes
+        cur_pos = fptr_tell()
 
         if num_bytes > length:
             # Length of the current box goes past the end of the
@@ -72,14 +93,18 @@ def hv_parse_superbox(fptr, offset, length):
             msg = '{0} box has incorrect box length ({1})'
             msg = msg.format(box_id, num_bytes)
             warnings.warn(msg)
-        elif fptr.tell() > start:
+        elif cur_pos == start:
+            # At the start of the next box, jump to it.
+            continue
+        elif cur_pos > start:
             # The box must be invalid somehow, as the file pointer is
             # positioned past the end of the box.
-            msg = '{0} box may be invalid, the file pointer is positioned '
-            msg += '{1} bytes past the end of the box.'
-            msg = msg.format(box_id, fptr.tell() - start)
+            msg = ('{0} box may be invalid, the file pointer is positioned '
+                   '{1} bytes past the end of the box.')
+            msg = msg.format(box_id, cur_pos - start)
             warnings.warn(msg)
-        fptr.seek(start)
+
+        fptr_seek(start)
 
     return superbox
 
@@ -89,7 +114,8 @@ class hvJPEG2000SignatureBox(object):
     @classmethod
     def parse(cls, fptr, offset, length):
         if fptr.read(4) != b'\x0D\x0A\x87\x0A':
-            print('JP2 signature verification failed: ' + fptr.name)
+            msg = 'JP2 signature verification failed for file {0}.'.format(fptr.name)
+            warnings.warn(msg)
             return None
         return cls
 
@@ -100,7 +126,8 @@ class hvFileTypeBox(object):
     @classmethod
     def parse(cls, fptr, offset, length):
         if fptr.read(length - 8) != b'\x6A\x70\x32\x20\x00\x00\x00\x00\x6A\x70\x32\x20':
-            print('JP2 file type verification failed: ' + fptr.name)
+            msg = 'JP2 file type verification failed for file {0}.'.format(fptr.name)
+            warnings.warn(msg)
             return None
         return cls
 
