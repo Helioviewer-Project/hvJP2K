@@ -144,7 +144,7 @@ cdef class hvFileTypeBox(object):
 
 
 cdef class hvJP2HeaderBox(object):
-    cdef public const char *box_id
+    cdef public str box_id
     cdef public int offset
     cdef public int length
     cdef public bytes header
@@ -167,7 +167,7 @@ cdef class hvJP2HeaderBox(object):
 
 
 cdef class hvXMLBox(object):
-    cdef public const char *box_id
+    cdef public str box_id
     cdef public int offset
     cdef public int length
     cdef public bytes xmlbuf
@@ -186,7 +186,7 @@ cdef class hvXMLBox(object):
 
 
 cdef class hvContiguousCodestreamBox(object):
-    cdef public const char *box_id
+    cdef public str box_id
     cdef public int offset
     cdef public int length
 
