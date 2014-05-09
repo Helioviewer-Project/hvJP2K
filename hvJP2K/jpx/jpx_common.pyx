@@ -12,8 +12,8 @@ from glymur.jp2box import Jp2kBox, _BOX_WITH_ID, UnknownBox
 from glymur.codestream import Codestream
 
 from libc.stdint cimport uint32_t, uint64_t
-from cpython.bytes cimport PyBytes_GET_SIZE, PyBytes_AsString, PyBytes_FromString
-cdef extern from "arpa/inet.h":
+from cpython.bytes cimport PyBytes_GET_SIZE, PyBytes_AS_STRING, PyBytes_FromString
+cdef extern from 'arpa/inet.h':
     uint32_t ntohl(uint32_t)
 
 cdef dict BOX_WITH_ID = _BOX_WITH_ID
@@ -31,9 +31,8 @@ cdef object hv_parse_this_box(fptr, bytes box_id, int start, int num_bytes):
     try:
         box = parser(fptr, start, num_bytes)
     except ValueError as err:
-        msg = "Encountered an unrecoverable ValueError while parsing a {0} "
-        msg += "box at byte offset {1}.  The original error message was "
-        msg += "\"{2}\""
+        msg = ('Encountered an unrecoverable ValueError while parsing a {0} '
+              'box at byte offset {1}.  The original error message was "{2}"')
         msg = msg.format(box_id.decode('utf-8'), start, str(err))
         warnings.warn(msg, UserWarning)
         box = UnknownBox(box_id.decode('utf-8'), length=num_bytes, offset=start)
@@ -66,12 +65,12 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
 
         read_buffer = fptr_read(8)
         if PyBytes_GET_SIZE(read_buffer) < 8:
-            msg = "Extra bytes at end of file ignored."
+            msg = 'Extra bytes at end of file ignored.'
             warnings.warn(msg)
             return superbox
 
         # (box_length, box_id) = struct_unpack('>I4s', read_buffer)
-        c_read_buffer = PyBytes_AsString(read_buffer)
+        c_read_buffer = PyBytes_AS_STRING(read_buffer)
         box_length = ntohl((<uint32_t *> c_read_buffer)[0])
         box_id = PyBytes_FromString(c_read_buffer + 4)
 
@@ -112,8 +111,8 @@ cpdef list hv_parse_superbox(fptr, int offset, int length):
         elif cur_pos > start:
             # The box must be invalid somehow, as the file pointer is
             # positioned past the end of the box.
-            msg = '{0} box may be invalid, the file pointer is positioned '
-            msg += '{1} bytes past the end of the box.'
+            msg = ('{0} box may be invalid, the file pointer is positioned '
+                   '{1} bytes past the end of the box.')
             msg = msg.format(box_id, cur_pos - start)
             warnings.warn(msg)
 
