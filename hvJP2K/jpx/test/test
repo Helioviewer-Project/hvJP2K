@@ -8,10 +8,12 @@ function do_test {
     mkdir -p $1-test
     cd $1-test
 
+    PRE=/swhv/python/bin
+
     IN=$(echo ../"$1"-ref/*.jp2 | tr ' ' ,)
-    /swhv/python/bin/hv_jpx_split -i ../$1.jpx
-    /swhv/python/bin/hv_jpx_merge -i *.jp2 -o $1-hv.jpx
-    /swhv/python/bin/hv_jpx_merge -i $IN -o $1-hv-links.jpx -links
+    $PRE/hv_jpx_split -i ../$1.jpx
+    $PRE/hv_jpx_merge -i *.jp2 -o $1-hv.jpx
+    $PRE/hv_jpx_merge -i $IN -o $1-hv-links.jpx -links
 
     for i in *; do
         TST=$i

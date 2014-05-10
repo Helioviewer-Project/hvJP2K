@@ -15,12 +15,12 @@ class ThreadedUnixStreamHandler(socketserver.StreamRequestHandler):
     def handle(self):
         #start = time.clock()
 
-        jp2s_in = self.rfile.readline().decode('utf-8').strip()
-        jpx_out = self.rfile.readline().decode('utf-8').strip()
+        jp2s_in = self.rfile.readline().strip()
+        jpx_out = self.rfile.readline().strip()
         links = self.rfile.readline().strip()
         links = True if links else False
 
-        names_in = [name for name in jp2s_in.split(',') if name]
+        names_in = [name for name in jp2s_in.split(b',') if name]
         jpx_merge(names_in, jpx_out, links)
 
         #print(time.clock() - start)

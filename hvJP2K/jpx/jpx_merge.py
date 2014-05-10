@@ -5,7 +5,6 @@
 # cython: wraparound=False
 
 from io import BytesIO
-from os import stat
 import struct
 import sys
 
@@ -13,6 +12,7 @@ from glymur import jp2box
 
 from ..jp2.jp2_common import first_box
 from . import jpx_common
+from .jpx_mmap import hvMap
 
 # override glymur box parsing
 jp2box._BOX_WITH_ID[b'jP  '] = jpx_common.hvJPEG2000SignatureBox()
@@ -74,11 +74,13 @@ def jpx_merge(names_in, jpxname, links):
 
     head0 = None
 
+    ifile = hvMap()
     for i in range(num):
         jp2name = names_in[i]
 
-        with open(jp2name, 'rb') as ifile:
-            box = jpx_common.hv_parse_superbox(ifile, 0, stat(jp2name).st_size)
+        try:
+            ifile.open(jp2name)
+            box = jpx_common.hv_parse_superbox(ifile, 0, ifile.size())
 
             # failed JP2 signature or file type verification
             if box[0] is None or box[1] is None:
@@ -119,13 +121,15 @@ def jpx_merge(names_in, jpxname, links):
                 jpx_write(struct_pack('>QIH', jp2c.offset, jp2c.length, i + 1))
 
                 # dtbl
-                url_ = b'file://' + jp2name.encode() + b'\0'
+                url_ = b'file://' + jp2name + b'\0'
                 # 8 + 1 + 1 + 1 + 1
                 dtbl_write(struct_pack('>I4sI', 12 + len(url_), b'url ', 0))
                 dtbl_write(url_)
             else:
                 # copy jp2c
                 jp2c.hv_copy(ifile, jpx)
+        finally:
+            ifile.close()
 
     # asoc size + length field
     jpx_write(struct_pack('>I', asoc.tell() + 4))

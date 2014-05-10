@@ -14,7 +14,7 @@ from glymur.codestream import Codestream
 cimport cython
 
 from libc.stdint cimport uint32_t, uint64_t
-from cpython.bytes cimport PyBytes_GET_SIZE, PyBytes_AS_STRING, PyBytes_FromString
+from cpython.bytes cimport PyBytes_GET_SIZE, PyBytes_AS_STRING, PyBytes_FromStringAndSize
 cdef extern from 'arpa/inet.h':
     uint32_t ntohl(uint32_t)
 
@@ -35,7 +35,7 @@ cdef object hv_parse_this_box(fptr, bytes box_id, Py_ssize_t start, Py_ssize_t n
         box = parser(fptr, start, num_bytes)
     except ValueError as err:
         msg = ('Encountered an unrecoverable ValueError while parsing a {0} '
-              'box at byte offset {1}.  The original error message was "{2}"')
+               'box at byte offset {1}.  The original error message was "{2}"')
         msg = msg.format(box_id.decode('utf-8'), start, str(err))
         warnings.warn(msg, UserWarning)
         box = UnknownBox(box_id.decode('utf-8'), length=num_bytes, offset=start)
@@ -77,7 +77,7 @@ cpdef list hv_parse_superbox(fptr, Py_ssize_t offset, Py_ssize_t length):
         # (box_length, box_id) = struct_unpack('>I4s', read_buffer)
         c_read_buffer = PyBytes_AS_STRING(read_buffer)
         box_length = ntohl((<uint32_t *> c_read_buffer)[0])
-        box_id = PyBytes_FromString(c_read_buffer + 4)
+        box_id = PyBytes_FromStringAndSize(c_read_buffer + 4, 4)
 
         if box_length == 0:
             # The length of the box is presumed to last until the end of
