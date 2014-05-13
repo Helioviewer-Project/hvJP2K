@@ -25,7 +25,7 @@ def hv_parse_this_box(fptr, box_id, start, num_bytes):
         box = parser(fptr, start, num_bytes)
     except ValueError as err:
         msg = ('Encountered an unrecoverable ValueError while parsing a {0} '
-              'box at byte offset {1}.  The original error message was "{2}"')
+               'box at byte offset {1}.  The original error message was "{2}"')
         msg = msg.format(box_id.decode('utf-8'), start, str(err))
         warnings.warn(msg, UserWarning)
         box = UnknownBox(box_id.decode('utf-8'), length=num_bytes, offset=start)
@@ -51,14 +51,13 @@ def hv_parse_superbox(fptr, offset, length):
 
         # Are we at the end of the superbox?
         if start >= offset + length:
-            # break
-            return superbox
+            break
 
         read_buffer = fptr_read(8)
         if len(read_buffer) < 8:
             msg = 'Extra bytes at end of file ignored.'
             warnings.warn(msg)
-            return superbox
+            break
 
         (box_length, box_id) = struct.unpack('>I4s', read_buffer)
         if box_length == 0:
@@ -81,7 +80,7 @@ def hv_parse_superbox(fptr, offset, length):
 
         if box_length == 0:
             # We're done, box lasted until the end of the file.
-            return superbox
+            break
 
         # Position to the start of the next box.
         start += num_bytes

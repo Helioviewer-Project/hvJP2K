@@ -15,13 +15,6 @@ from posix.unistd cimport close
 ctypedef Py_ssize_t size_t
 ctypedef Py_ssize_t off_t
 
-ctypedef struct mmap_t:
-    char *buf
-    Py_ssize_t size
-    Py_ssize_t off
-    char *name
-    Py_ssize_t name_len
-
 cdef extern from 'sys/stat.h' nogil:
     struct stat_t 'stat':
         off_t     st_size
@@ -37,12 +30,12 @@ cdef extern from 'sys/mman.h' nogil:
 
 cdef int mmap_open(const char *name, mmap_t *mm) nogil:
     cdef stat_t st
-    cdef Py_ssize_t size
+    cdef Py_ssize_t size, name_len
     cdef int fd
     cdef void *buf
 
     if stat(name, &st) !=0:
-        return 0
+        return -1
     size = st.st_size
 
     fd = open(name, O_RDONLY)
@@ -52,17 +45,19 @@ cdef int mmap_open(const char *name, mmap_t *mm) nogil:
     buf = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0)
     close(fd)
     if buf == <void *> MAP_FAILED:
-        return 0
+        return -1
 
     mm.buf = <char *> buf
     mm.size = size
     mm.off = 0
 
-    cdef Py_ssize_t name_len = strlen(name)
+    name_len = strlen(name)
     mm.name = <char *> malloc(name_len + 1)
     memcpy(mm.name, name, name_len)
     mm.name[name_len] = 0
     mm.name_len = name_len
+
+    return 0
 
 cdef void mmap_close(mmap_t *mm) nogil:
     munmap(mm.buf, mm.size) # != 0
@@ -73,14 +68,13 @@ cdef void mmap_close(mmap_t *mm) nogil:
 
 @cython.freelist(4)
 cdef class hvMap(object):
-    cdef mmap_t *mm
-
     def __cinit__(self):
         self.mm = <mmap_t *> calloc(1, sizeof(mmap_t))
 
     def __dealloc__(self):
         free(self.mm)
 
+    # used in error path, slow unicode
     def __getattr__(self, name):
         if name == 'name':
             return <str> PyBytes_FromStringAndSize(self.mm.name, self.mm.name_len).decode('utf-8')
@@ -101,6 +95,12 @@ cdef class hvMap(object):
         self.mm.off = off
 
     cpdef bytes read(hvMap self, Py_ssize_t num):
+        cdef Py_ssize_t new_off = self.mm.off + num
+        if new_off > self.mm.size - 1:
+            new_off = self.mm.size - 1
+            num = new_off - self.mm.off + 1
+
         cdef bytes buf = <bytes> PyBytes_FromStringAndSize(self.mm.buf + self.mm.off, num)
-        self.mm.off += num
+        self.mm.off = new_off
+
         return buf

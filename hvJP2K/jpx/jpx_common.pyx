@@ -18,6 +18,8 @@ from cpython.bytes cimport PyBytes_GET_SIZE, PyBytes_AS_STRING, PyBytes_FromStri
 cdef extern from 'arpa/inet.h':
     uint32_t ntohl(uint32_t)
 
+from .jpx_mmap cimport hvMap
+
 
 cdef dict BOX_WITH_ID = <dict> _BOX_WITH_ID
 
@@ -65,14 +67,13 @@ cpdef list hv_parse_superbox(fptr, Py_ssize_t offset, Py_ssize_t length):
 
         # Are we at the end of the superbox?
         if start >= offset + length:
-            # break
-            return superbox
+            break
 
         read_buffer = <bytes> fptr_read(8)
         if PyBytes_GET_SIZE(read_buffer) < 8:
             msg = 'Extra bytes at end of file ignored.'
             warnings.warn(msg)
-            return superbox
+            break
 
         # (box_length, box_id) = struct_unpack('>I4s', read_buffer)
         c_read_buffer = PyBytes_AS_STRING(read_buffer)
@@ -94,11 +95,12 @@ cpdef list hv_parse_superbox(fptr, Py_ssize_t offset, Py_ssize_t length):
             # The box_length value really is the length of the box!
             num_bytes = box_length
 
-        superbox.append(hv_parse_this_box(fptr, box_id, start, num_bytes))
+        box = hv_parse_this_box(fptr, box_id, start, num_bytes)
+        superbox.append(box)
 
         if box_length == 0:
             # We're done, box lasted until the end of the file.
-            return superbox
+            break
 
         # Position to the start of the next box.
         start += num_bytes
