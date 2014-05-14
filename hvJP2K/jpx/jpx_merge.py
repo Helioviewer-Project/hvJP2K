@@ -10,9 +10,8 @@ import sys
 
 from glymur import jp2box
 
-from ..jp2.jp2_common import first_box
-from . import jpx_common
-from .jpx_mmap import hvMap
+from ..jp2 import jp2_common
+from . import jpx_common, jpx_mmap
 
 # override glymur box parsing
 jp2box._BOX_WITH_ID[b'jP  '] = jpx_common.hvJPEG2000SignatureBox()
@@ -24,10 +23,10 @@ jp2box._BOX_WITH_ID[b'jp2c'] = jpx_common.hvContiguousCodestreamBox
 
 def write_jpch_jplh(jp2h, jpx):
     # write all boxes, could be optimized
-    ihdr = first_box(jp2h, 'ihdr')
-    colr = first_box(jp2h, 'colr')
-    pclr = first_box(jp2h, 'pclr')
-    cmap = first_box(jp2h, 'cmap')
+    ihdr = jp2_common.first_box(jp2h, 'ihdr')
+    colr = jp2_common.first_box(jp2h, 'colr')
+    pclr = jp2_common.first_box(jp2h, 'pclr')
+    cmap = jp2_common.first_box(jp2h, 'cmap')
 
     # create direct colour mapping
     if cmap is None:
@@ -73,8 +72,8 @@ def jpx_merge(names_in, jpxname, links):
     dtbl_write(struct_pack('>4sH', b'dtbl', num)) # failed verification ?
 
     head0 = None
+    ifile = jpx_mmap.hvMap()
 
-    ifile = hvMap()
     for i in range(num):
         jp2name = names_in[i]
 
@@ -86,9 +85,9 @@ def jpx_merge(names_in, jpxname, links):
             if box[0] is None or box[1] is None:
                 continue
 
-            jp2h = first_box(box, 'jp2h')
-            xml_ = first_box(box, 'xml ')
-            jp2c = first_box(box, 'jp2c')
+            jp2h = jp2_common.first_box(box, 'jp2h')
+            xml_ = jp2_common.first_box(box, 'xml ')
+            jp2c = jp2_common.first_box(box, 'jp2c')
 
             # asoc
             if xml_ is not None:

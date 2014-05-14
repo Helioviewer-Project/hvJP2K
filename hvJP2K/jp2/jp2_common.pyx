@@ -10,7 +10,7 @@ cpdef first_box(list boxes, str box_id):
 
     for i in range(n):
         box = boxes[i]
-        if box.box_id == box_id:
+        if box is not None and box.box_id == box_id:
             return box
 
     return None

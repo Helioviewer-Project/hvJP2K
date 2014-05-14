@@ -8,8 +8,9 @@ import os
 import struct
 import warnings
 
-from glymur.jp2box import Jp2kBox, _BOX_WITH_ID, UnknownBox
+from glymur.jp2box import UnknownBox, _BOX_WITH_ID
 from glymur.codestream import Codestream
+
 
 def hv_parse_this_box(fptr, box_id, start, num_bytes):
     try:
@@ -110,6 +111,7 @@ def hv_parse_superbox(fptr, offset, length):
 # singleton essentially
 class hvJPEG2000SignatureBox(object):
     box_id = 'jP  '
+
     @classmethod
     def parse(cls, fptr, offset, length):
         if fptr.read(4) != b'\x0D\x0A\x87\x0A':
@@ -122,6 +124,7 @@ class hvJPEG2000SignatureBox(object):
 # singleton essentially
 class hvFileTypeBox(object):
     box_id = 'ftyp'
+
     @classmethod
     def parse(cls, fptr, offset, length):
         if fptr.read(length - 8) != b'\x6A\x70\x32\x20\x00\x00\x00\x00\x6A\x70\x32\x20':

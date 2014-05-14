@@ -4,13 +4,6 @@
 # cython: boundscheck=False
 # cython: wraparound=False
 
-import os
-import struct
-import warnings
-
-from glymur.jp2box import Jp2kBox, _BOX_WITH_ID, UnknownBox
-from glymur.codestream import Codestream
-
 cimport cython
 
 from libc.stdint cimport uint32_t, uint64_t
@@ -18,7 +11,12 @@ from cpython.bytes cimport PyBytes_GET_SIZE, PyBytes_AS_STRING, PyBytes_FromStri
 cdef extern from 'arpa/inet.h':
     uint32_t ntohl(uint32_t)
 
-from .jpx_mmap cimport hvMap
+import os
+import struct
+import warnings
+
+from glymur.jp2box import UnknownBox, _BOX_WITH_ID
+from glymur.codestream import Codestream
 
 
 cdef dict BOX_WITH_ID = <dict> _BOX_WITH_ID
@@ -132,6 +130,7 @@ cpdef list hv_parse_superbox(fptr, Py_ssize_t offset, Py_ssize_t length):
 @cython.freelist(4)
 cdef class hvJPEG2000SignatureBox(object):
     box_id = 'jP  '
+
     @classmethod
     def parse(cls, fptr, Py_ssize_t offset, Py_ssize_t length):
         cdef bytes read_buffer = <bytes> fptr.read(4)
@@ -146,6 +145,7 @@ cdef class hvJPEG2000SignatureBox(object):
 @cython.freelist(4)
 cdef class hvFileTypeBox(object):
     box_id = 'ftyp'
+
     @classmethod
     def parse(cls, fptr, Py_ssize_t offset, Py_ssize_t length):
         cdef bytes read_buffer = <bytes> fptr.read(length - 8)
@@ -163,12 +163,12 @@ cdef class hvJP2HeaderBox(object):
     cdef readonly Py_ssize_t length
     cdef readonly bytes header
 
-    @staticmethod
-    def parse(fptr, Py_ssize_t offset, Py_ssize_t length):
+    @classmethod
+    def parse(cls, fptr, Py_ssize_t offset, Py_ssize_t length):
         # grab entire box
         fptr.seek(offset)
 
-        cdef hvJP2HeaderBox self = <hvJP2HeaderBox> hvJP2HeaderBox.__new__(hvJP2HeaderBox)
+        cdef hvJP2HeaderBox self = <hvJP2HeaderBox> cls.__new__(cls)
         self.box_id = 'jp2h'
         self.offset = offset
         self.length = length
@@ -187,12 +187,12 @@ cdef class hvXMLBox(object):
     cdef readonly Py_ssize_t length
     cdef readonly bytes xmlbuf
 
-    @staticmethod
-    def parse(fptr, Py_ssize_t offset, Py_ssize_t length):
+    @classmethod
+    def parse(cls, fptr, Py_ssize_t offset, Py_ssize_t length):
         # grab entire box
         fptr.seek(offset)
 
-        cdef hvXMLBox self = <hvXMLBox> hvXMLBox.__new__(hvXMLBox)
+        cdef hvXMLBox self = <hvXMLBox> cls.__new__(cls)
         self.box_id = 'xml '
         self.offset = offset
         self.length = length
@@ -206,11 +206,11 @@ cdef class hvContiguousCodestreamBox(object):
     cdef readonly Py_ssize_t offset
     cdef readonly Py_ssize_t length
 
-    @staticmethod
-    def parse(fptr, Py_ssize_t offset, Py_ssize_t length):
+    @classmethod
+    def parse(cls, fptr, Py_ssize_t offset, Py_ssize_t length):
         cdef Py_ssize_t main_header_offset = fptr.tell()
 
-        cdef hvContiguousCodestreamBox self = <hvContiguousCodestreamBox> hvContiguousCodestreamBox.__new__(hvContiguousCodestreamBox)
+        cdef hvContiguousCodestreamBox self = <hvContiguousCodestreamBox> cls.__new__(cls)
         self.box_id = 'jp2c'
         self.offset = main_header_offset
         self.length = length + offset - main_header_offset
