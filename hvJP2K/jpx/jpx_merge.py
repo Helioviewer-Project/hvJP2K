@@ -4,7 +4,7 @@
 # cython: boundscheck=False
 # cython: wraparound=False
 
-from io import BytesIO
+import cython
 import struct
 import sys
 
@@ -50,9 +50,11 @@ def jpx_merge(names_in, jpxname, links):
     struct_pack = struct.pack
 
     # ftbl with 1 flst with 1 fragment
+    ftbl_flst = cython.declare(cython.bytes)
     ftbl_flst = struct_pack('>I4sI4sH', 8 + 8 + 2 + 14, b'ftbl', 8 + 2 + 14, b'flst', 1)
 
     # typical pattern of empty jpch & jplh
+    empty_jpch_jplh = cython.declare(cython.bytes)
     empty_jpch_jplh = struct_pack('>I4sI4s', 8, b'jpch', 8, b'jplh')
 
     # jpx stream
@@ -62,40 +64,47 @@ def jpx_merge(names_in, jpxname, links):
     jp2box.FileTypeBox(brand='jpx ', compatibility_list=('jpx ', 'jp2 ', 'jpxb')).write(jpx)
 
     # asoc stream
-    asoc = BytesIO()
-    asoc_write = asoc.write
-    asoc_write(struct_pack('>4s', b'asoc'))
-
+    asoc = bytearray()
     # dtbl stream
-    dtbl = BytesIO()
-    dtbl_write = dtbl.write
-    dtbl_write(struct_pack('>4sH', b'dtbl', num)) # failed verification ?
+    dtbl = bytearray()
 
+    head0 = cython.declare(cython.bytes)
     head0 = None
+
+    ifile = cython.declare(jpx_mmap.hvMap)
     ifile = jpx_mmap.hvMap()
 
     for i in range(num):
+        jp2name = cython.declare(cython.bytes)
         jp2name = names_in[i]
 
         try:
             ifile.open(jp2name)
+
+            box = cython.declare(cython.list)
             box = jpx_common.hv_parse_superbox(ifile, 0, ifile.size())
 
             # failed JP2 signature or file type verification
             if box[0] is None or box[1] is None:
                 continue
 
+            jp2h = cython.declare(jpx_common.hvJP2HeaderBox)
             jp2h = jp2_common.first_box(box, 'jp2h')
+
+            xml_ = cython.declare(jpx_common.hvXMLBox)
             xml_ = jp2_common.first_box(box, 'xml ')
+
+            jp2c = cython.declare(jpx_common.hvContiguousCodestreamBox)
             jp2c = jp2_common.first_box(box, 'jp2c')
 
             # asoc
             if xml_ is not None:
-                # 8 + 16
-                asoc_write(struct_pack('>I4s', 24 + xml_.length, b'asoc'))
-                # 8 + 4 + 4
-                asoc_write(struct_pack('>I4sII', 16, b'nlst', 0x01000000+i, 0x02000000+i))
-                asoc_write(xml_.xmlbuf)
+                asoc += struct_pack('>I4sI4sII',
+                                    # asoc 8 + 16
+                                    24 + xml_.length, b'asoc',
+                                    # nlst 8 + 4 + 4
+                                    16, b'nlst', 0x01000000+i, 0x02000000+i)
+                asoc += xml_.xmlbuf
 
             # identical JP2 header, typical
             if head0 == jp2h.header:
@@ -108,35 +117,33 @@ def jpx_merge(names_in, jpxname, links):
                 if head0 is None:
                     head0 = jp2h.header[:]
                     # write jp2h
-                    jpx_write(head0)
-                    jpx_write(empty_jpch_jplh)
+                    jpx_write(head0 + empty_jpch_jplh)
                 # different size/colour spec
                 else:
                     write_jpch_jplh(jp2h_box, jpx)
 
             if links:
                 # ftbl
-                jpx_write(ftbl_flst)
-                jpx_write(struct_pack('>QIH', jp2c.offset, jp2c.length, i + 1))
+                jpx_write(ftbl_flst + struct_pack('>QIH', jp2c.offset, jp2c.length, i + 1))
 
                 # dtbl
                 url_ = b'file://' + jp2name + b'\0'
                 # 8 + 1 + 1 + 1 + 1
-                dtbl_write(struct_pack('>I4sI', 12 + len(url_), b'url ', 0))
-                dtbl_write(url_)
+                dtbl += struct_pack('>I4sI', 12 + len(url_), b'url ', 0)
+                dtbl += url_
             else:
                 # copy jp2c
                 jp2c.hv_copy(ifile, jpx)
         finally:
             ifile.close()
 
-    # asoc size + length field
-    jpx_write(struct_pack('>I', asoc.tell() + 4))
-    jpx_write(asoc.getvalue())
+    # 8 + asoc size
+    jpx_write(struct_pack('>I4s', 8 + len(asoc), b'asoc'))
+    jpx_write(asoc)
 
     if links:
-        # dtbl size + length field
-        jpx_write(struct_pack('>I', dtbl.tell() + 4))
-        jpx_write(dtbl.getvalue())
+        # 8 + 2 + dtbl size
+        jpx_write(struct_pack('>I4sH', 10 + len(dtbl), b'dtbl', num)) # failed verification ?
+        jpx_write(dtbl)
 
     jpx.close()
