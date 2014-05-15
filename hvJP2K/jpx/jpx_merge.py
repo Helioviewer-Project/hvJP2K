@@ -64,9 +64,9 @@ def jpx_merge(names_in, jpxname, links):
     jp2box.FileTypeBox(brand='jpx ', compatibility_list=('jpx ', 'jp2 ', 'jpxb')).write(jpx)
 
     # asoc stream
-    asoc = bytearray()
+    asoc = []
     # dtbl stream
-    dtbl = bytearray()
+    dtbl = []
 
     head0 = cython.declare(cython.bytes)
     head0 = None
@@ -99,12 +99,12 @@ def jpx_merge(names_in, jpxname, links):
 
             # asoc
             if xml_ is not None:
-                asoc += struct_pack('>I4sI4sII',
+                asoc.append(struct_pack('>I4sI4sII',
                                     # asoc 8 + 16
                                     24 + xml_.length, b'asoc',
                                     # nlst 8 + 4 + 4
-                                    16, b'nlst', 0x01000000+i, 0x02000000+i)
-                asoc += xml_.xmlbuf
+                                    16, b'nlst', 0x01000000+i, 0x02000000+i))
+                asoc.append(xml_.xmlbuf)
 
             # identical JP2 header, typical
             if head0 == jp2h.header:
@@ -127,10 +127,10 @@ def jpx_merge(names_in, jpxname, links):
                 jpx_write(ftbl_flst + struct_pack('>QIH', jp2c.offset, jp2c.length, i + 1))
 
                 # dtbl
+                url_ = cython.declare(cython.bytes)
                 url_ = b'file://' + jp2name + b'\0'
                 # 8 + 1 + 1 + 1 + 1
-                dtbl += struct_pack('>I4sI', 12 + len(url_), b'url ', 0)
-                dtbl += url_
+                dtbl.append(struct_pack('>I4sI', 12 + len(url_), b'url ', 0) + url_)
             else:
                 # copy jp2c
                 jp2c.hv_copy(ifile, jpx)
@@ -138,12 +138,14 @@ def jpx_merge(names_in, jpxname, links):
             ifile.close()
 
     # 8 + asoc size
-    jpx_write(struct_pack('>I4s', 8 + len(asoc), b'asoc'))
-    jpx_write(asoc)
+    asoc_full = b''.join(asoc)
+    jpx_write(struct_pack('>I4s', 8 + len(asoc_full), b'asoc'))
+    jpx_write(asoc_full)
 
     if links:
         # 8 + 2 + dtbl size
-        jpx_write(struct_pack('>I4sH', 10 + len(dtbl), b'dtbl', num)) # failed verification ?
-        jpx_write(dtbl)
+        dtbl_full = b''.join(dtbl)
+        jpx_write(struct_pack('>I4sH', 10 + len(dtbl_full), b'dtbl', len(dtbl)))
+        jpx_write(dtbl_full)
 
     jpx.close()
