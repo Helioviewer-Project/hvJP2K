@@ -1,3 +1,4 @@
 
 from hvJP2K.jp2 cimport jp2_common
-cimport jpx_common, jpx_mmap
+cimport jpx_common
+cimport jpx_mmap

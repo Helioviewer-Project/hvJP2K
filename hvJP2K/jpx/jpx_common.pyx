@@ -158,11 +158,6 @@ cdef class hvFileTypeBox(object):
 
 @cython.freelist(4)
 cdef class hvJP2HeaderBox(object):
-    cdef readonly str box_id
-    cdef readonly Py_ssize_t offset
-    cdef readonly Py_ssize_t length
-    cdef readonly bytes header
-
     @classmethod
     def parse(cls, fptr, Py_ssize_t offset, Py_ssize_t length):
         # grab entire box
@@ -175,18 +170,13 @@ cdef class hvJP2HeaderBox(object):
         self.header = <bytes> fptr.read(length)
         return self
 
-    cpdef list hv_parse(self, fptr):
+    cpdef list hv_parse(hvJP2HeaderBox self, fptr):
         fptr.seek(self.offset + 8)
         return hv_parse_superbox(fptr, self.offset, self.length)
 
 
 @cython.freelist(4)
 cdef class hvXMLBox(object):
-    cdef readonly str box_id
-    cdef readonly Py_ssize_t offset
-    cdef readonly Py_ssize_t length
-    cdef readonly bytes xmlbuf
-
     @classmethod
     def parse(cls, fptr, Py_ssize_t offset, Py_ssize_t length):
         # grab entire box
@@ -202,10 +192,6 @@ cdef class hvXMLBox(object):
 
 @cython.freelist(4)
 cdef class hvContiguousCodestreamBox(object):
-    cdef readonly str box_id
-    cdef readonly Py_ssize_t offset
-    cdef readonly Py_ssize_t length
-
     @classmethod
     def parse(cls, fptr, Py_ssize_t offset, Py_ssize_t length):
         cdef Py_ssize_t main_header_offset = fptr.tell()
@@ -216,11 +202,11 @@ cdef class hvContiguousCodestreamBox(object):
         self.length = length + offset - main_header_offset
         return self
 
-    cpdef hv_copy(self, ifile, ofile):
+    cpdef hv_copy(hvContiguousCodestreamBox self, ifile, ofile):
         ifile.seek(self.offset)
         ofile.write(struct.pack('>I4s', self.length + 8, b'jp2c'))
         ofile.write(ifile.read(self.length))
 
-    cpdef object hv_parse(self, fptr):
+    cpdef object hv_parse(hvContiguousCodestreamBox self, fptr):
         fptr.seek(self.offset)
         return Codestream(fptr, self.length, header_only=True)
