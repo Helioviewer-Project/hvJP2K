@@ -5,11 +5,12 @@ ctypedef struct mmap_t:
     Py_ssize_t off
     char *name
     Py_ssize_t name_len
+    int is_open
 
 cdef class hvMap(object):
     cdef mmap_t *mm
 
-    cpdef open(hvMap self, bytes name)
+    cpdef int open(hvMap self, bytes name)
     cpdef close(hvMap self)
     cpdef Py_ssize_t size(hvMap self)
     cpdef Py_ssize_t tell(hvMap self)

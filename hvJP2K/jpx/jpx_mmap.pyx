@@ -28,11 +28,14 @@ cdef extern from 'sys/mman.h' nogil:
     void *mmap(void *, size_t, int, int, int, off_t)
     int munmap(void *, size_t)
 
-cdef int mmap_open(const char *name, mmap_t *mm) nogil:
+cdef inline int mmap_open(const char *name, mmap_t *mm) nogil:
     cdef stat_t st
     cdef Py_ssize_t size, name_len
     cdef int fd
     cdef void *buf
+
+    if mm.is_open:
+        return -1
 
     if stat(name, &st) !=0:
         return -1
@@ -57,14 +60,17 @@ cdef int mmap_open(const char *name, mmap_t *mm) nogil:
     mm.name[name_len] = 0
     mm.name_len = name_len
 
+    mm.is_open = 1
+
     return 0
 
-cdef void mmap_close(mmap_t *mm) nogil:
-    munmap(mm.buf, mm.size) # != 0
-
-    if mm.name != NULL:
-        free(mm.name)
-    memset(mm, 0, sizeof(mmap_t))
+cdef inline void mmap_close(mmap_t *mm) nogil:
+    if mm.is_open:
+        if mm.buf != NULL:
+            munmap(mm.buf, mm.size) # != 0
+        if mm.name != NULL:
+            free(mm.name)
+        memset(mm, 0, sizeof(mmap_t))
 
 @cython.freelist(4)
 cdef class hvMap(object):
@@ -72,15 +78,17 @@ cdef class hvMap(object):
         self.mm = <mmap_t *> calloc(1, sizeof(mmap_t))
 
     def __dealloc__(self):
+        mmap_close(self.mm)
         free(self.mm)
 
-    # used in error path, slow unicode
+    # used on error path, slow unicode
     def __getattr__(self, name):
         if name == 'name':
             return <str> PyBytes_FromStringAndSize(self.mm.name, self.mm.name_len).decode('utf-8')
 
-    cpdef open(hvMap self, bytes name):
-        mmap_open(PyBytes_AS_STRING(name), self.mm)
+    cpdef int open(hvMap self, bytes name):
+        mmap_close(self.mm)
+        return mmap_open(PyBytes_AS_STRING(name), self.mm)
 
     cpdef close(hvMap self):
         mmap_close(self.mm)
