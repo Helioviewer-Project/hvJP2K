@@ -79,13 +79,14 @@ def jpx_merge(names_in, jpxname, links):
         jp2name = names_in[i]
 
         try:
-            ifile.open(jp2name)
+            if ifile.open(jp2name):
+                continue
 
             box = cython.declare(cython.list)
             box = jpx_common.hv_parse_superbox(ifile, 0, ifile.size())
 
             # failed JP2 signature or file type verification
-            if box[0] is None or box[1] is None:
+            if not box or box[0] is None or box[1] is None:
                 continue
 
             jp2h = cython.declare(jpx_common.hvJP2HeaderBox)

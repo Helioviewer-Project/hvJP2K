@@ -84,6 +84,8 @@ cdef class hvMap(object):
     # used on error path, slow unicode
     def __getattr__(self, name):
         if name == 'name':
+            if self.mm.is_open == 0:
+                return None
             return <str> PyBytes_FromStringAndSize(self.mm.name, self.mm.name_len).decode('utf-8')
 
     cpdef int open(hvMap self, bytes name):
@@ -103,6 +105,9 @@ cdef class hvMap(object):
         self.mm.off = off
 
     cpdef bytes read(hvMap self, Py_ssize_t num):
+        if self.mm.is_open == 0:
+            return None
+
         cdef Py_ssize_t new_off = self.mm.off + num
         if new_off > self.mm.size - 1:
             new_off = self.mm.size - 1
