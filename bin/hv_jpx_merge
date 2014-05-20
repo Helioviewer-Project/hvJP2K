@@ -7,11 +7,10 @@ import sys
 from hvJP2K.jpx.jpx_merge import jpx_merge
 
 parser = argparse.ArgumentParser(description='Merge JP2 files into JPX files.')
-group = parser.add_mutually_exclusive_group(required=True)
-group.add_argument('-i', metavar='jp2file1,jp2file2,...', help='comma separated input JP2 filenames', nargs='+')
-group.add_argument('-s', metavar='argfile', help='read arguments from file')
-parser.add_argument('-o', metavar='jpxfile', help='output JPX filename', required=True)
+parser.add_argument('-i', metavar='jp2file1,jp2file2,...', help='comma separated input JP2 filenames', nargs='+')
+parser.add_argument('-o', metavar='jpxfile', help='output JPX filename')
 parser.add_argument('-links', help='record links rather than actual codestream data', action='store_true')
+parser.add_argument('-s', metavar='argfile', help='read arguments from file')
 args = parser.parse_args()
 
 if args.s:
@@ -21,7 +20,15 @@ if args.s:
             if not arg.strip():
                 continue
             arg_strings.append(arg)
+    # reparse with possible new arguments
     args = parser.parse_args(sys.argv[1:] + arg_strings)
+
+if args.i is None:
+    print('hv_jpx_merge: error: argument -i is required')
+    sys.exit(1)
+if args.o is None:
+    print('hv_jpx_merge: error: argument -o is required')
+    sys.exit(1)
 
 # be lenient with stray commas
 names = (name.encode() for name in args.i if name)
