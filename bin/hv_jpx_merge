@@ -1,14 +1,26 @@
 #!/usr/bin/env python
 
 import argparse
+import fileinput
+import sys
 
 from hvJP2K.jpx.jpx_merge import jpx_merge
 
 parser = argparse.ArgumentParser(description='Merge JP2 files into JPX files.')
 parser.add_argument('-i', metavar='jp2file1,jp2file2,...', help='comma separated input JP2 filenames', required=True, nargs='+')
 parser.add_argument('-o', metavar='jpxfile', help='output JPX filename', required=True)
+parser.add_argument('-s', metavar='argfile', help='read arguments from file')
 parser.add_argument('-links', help='record links rather than actual codestream data', action='store_true')
 args = parser.parse_args()
+
+if args.s:
+    arg_strings = []
+    for line in fileinput.input(args.s):
+        for arg in line.split():
+            if not arg.strip():
+                continue
+            arg_strings.append(arg)
+    args = parser.parse_args(sys.argv[1:] + arg_strings)
 
 # be lenient with stray commas
 names = (name.encode() for name in args.i if name)
