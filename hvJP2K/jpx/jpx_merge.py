@@ -20,26 +20,35 @@ jp2box._BOX_WITH_ID[b'jp2h'] = jpx_common.hvJP2HeaderBox
 jp2box._BOX_WITH_ID[b'xml '] = jpx_common.hvXMLBox
 jp2box._BOX_WITH_ID[b'jp2c'] = jpx_common.hvContiguousCodestreamBox
 
-
+# write all boxes, could be optimized
 def write_jpch_jplh(jp2h, jpx):
-    # write all boxes, could be optimized
     ihdr = jp2_common.first_box(jp2h, 'ihdr')
     colr = jp2_common.first_box(jp2h, 'colr')
     pclr = jp2_common.first_box(jp2h, 'pclr')
     cmap = jp2_common.first_box(jp2h, 'cmap')
+    cdef = jp2_common.first_box(jp2h, 'cdef')
+
+    num = ihdr.num_components
 
     # create direct colour mapping
     if cmap is None:
-        num = ihdr.num_components
         cmap = jp2box.ComponentMappingBox(component_index=list(range(num)),
                                           mapping_type=[0]*num,
                                           palette_index=[0]*num)
+
+    # channel definition, wild guess
+    if cdef is None:
+        if pclr is not None:
+            num = pclr.palette.shape[1]
+        # [COLOR,...], [GREY|RED,...]
+        cdef = jp2box.ChannelDefinitionBox(channel_type=[0]*num,
+                                           association=list(range(1,num+1)))
 
     boxes = (ihdr, cmap) if pclr is None else (ihdr, pclr, cmap)
     jp2box.CodestreamHeaderBox(box=boxes).write(jpx)
 
     cgrp = jp2box.ColourGroupBox(box=[colr])
-    jp2box.CompositingLayerHeaderBox(box=[cgrp]).write(jpx)
+    jp2box.CompositingLayerHeaderBox(box=(cgrp, cdef)).write(jpx)
 
 
 # @profile
