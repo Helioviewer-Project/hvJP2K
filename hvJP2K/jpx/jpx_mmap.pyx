@@ -43,7 +43,7 @@ cdef inline int mmap_open(const char *name, mmap_t *mm) nogil:
 
     fd = open(name, O_RDONLY)
     if fd == -1:
-        return 0
+        return -1
 
     buf = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0)
     close(fd)
