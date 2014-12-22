@@ -5,8 +5,8 @@
 # cython: wraparound=False
 
 import os
-import struct
 import warnings
+from struct import pack, unpack
 
 from glymur.jp2box import UnknownBox, _BOX_WITH_ID
 from glymur.codestream import Codestream
@@ -60,7 +60,7 @@ def hv_parse_superbox(fptr, offset, length):
             warnings.warn(msg)
             break
 
-        (box_length, box_id) = struct.unpack('>I4s', read_buffer)
+        (box_length, box_id) = unpack('>I4s', read_buffer)
         if box_length == 0:
             # The length of the box is presumed to last until the end of
             # the file.  Compute the effective length of the box.
@@ -71,7 +71,7 @@ def hv_parse_superbox(fptr, offset, length):
         elif box_length == 1:
             # The length of the box is in the XL field, a 64-bit value.
             read_buffer = fptr_read(8)
-            num_bytes, = struct.unpack('>Q', read_buffer)
+            num_bytes, = unpack('>Q', read_buffer)
         else:
             # The box_length value really is the length of the box!
             num_bytes = box_length
@@ -179,7 +179,7 @@ class hvContiguousCodestreamBox(object):
 
     def hv_copy(self, ifile, ofile):
         ifile.seek(self.offset)
-        ofile.write(struct.pack('>I4s', self.length + 8, b'jp2c'))
+        ofile.write(pack('>I4s', self.length + 8, b'jp2c'))
         ofile.write(ifile.read(self.length))
 
     def hv_parse(self, fptr):

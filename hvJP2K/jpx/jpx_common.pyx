@@ -12,8 +12,8 @@ cdef extern from 'arpa/inet.h':
     uint32_t ntohl(uint32_t)
 
 import os
-import struct
 import warnings
+from struct import pack, unpack
 
 from glymur.jp2box import UnknownBox, _BOX_WITH_ID
 from glymur.codestream import Codestream
@@ -73,7 +73,7 @@ cpdef list hv_parse_superbox(fptr, Py_ssize_t offset, Py_ssize_t length):
             warnings.warn(msg)
             break
 
-        # (box_length, box_id) = struct_unpack('>I4s', read_buffer)
+        # (box_length, box_id) = unpack('>I4s', read_buffer)
         c_read_buffer = PyBytes_AS_STRING(read_buffer)
         box_length = ntohl((<uint32_t *> c_read_buffer)[0])
         box_id = PyBytes_FromStringAndSize(c_read_buffer + 4, 4)
@@ -88,7 +88,7 @@ cpdef list hv_parse_superbox(fptr, Py_ssize_t offset, Py_ssize_t length):
         elif box_length == 1:
             # The length of the box is in the XL field, a 64-bit value.
             read_buffer = <bytes> fptr_read(8)
-            num_bytes, = struct.unpack('>Q', read_buffer)
+            num_bytes, = unpack('>Q', read_buffer)
         else:
             # The box_length value really is the length of the box!
             num_bytes = box_length
@@ -204,7 +204,7 @@ cdef class hvContiguousCodestreamBox(object):
 
     cpdef hv_copy(hvContiguousCodestreamBox self, ifile, ofile):
         ifile.seek(self.offset)
-        ofile.write(struct.pack('>I4s', self.length + 8, b'jp2c'))
+        ofile.write(pack('>I4s', self.length + 8, b'jp2c'))
         ofile.write(ifile.read(self.length))
 
     cpdef object hv_parse(hvContiguousCodestreamBox self, fptr):
