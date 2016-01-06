@@ -23,4 +23,6 @@ xmlTree = let.fromstring(cet.tostring(jpylyzer.checkOneFile(args.i)))
 
 schfile = args.schema if args.schema else hv_schematron()
 schema = iso.Schematron(let.parse(schfile))
-schema.assertValid(xmlTree)
+if schema.validate(xmlTree) is False:
+    print(args.i + ': fails validation')
+    print(schema.error_log)
