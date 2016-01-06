@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import argparse
+import sys
 
 import xml.etree.cElementTree as cet
 from lxml import etree as let
@@ -24,5 +27,6 @@ xmlTree = let.fromstring(cet.tostring(jpylyzer.checkOneFile(args.i)))
 schfile = args.schema if args.schema else hv_schematron()
 schema = iso.Schematron(let.parse(schfile))
 if schema.validate(xmlTree) is False:
-    print(args.i + ': fails validation')
-    print(schema.error_log)
+    print(args.i + ': fails validation', file=sys.stderr)
+    print(schema.error_log, file=sys.stderr)
+    sys.exit(1)
