@@ -5,18 +5,29 @@ import glymur
 import logging
 import os
 import sys
-#import sunpy
 import tempfile
 
 from hvJP2K.jp2.jp2_common import first_box
 
-def _transcode( filepath, corder='RPCL', orggen_plt='yes', cprecincts=None):
+def transcode(filepath, corder='RPCL', orggen_plt='yes', cprecincts=None, xml_rewrite=False):
     """Transcodes JPEG 2000 images to allow support for use with JHelioviewer
     and the JPIP server"""
+
+    print filepath
+
+    if xml_rewrite:
+        jp2 = glymur.Jp2k(filepath)
+        xml_ = first_box(jp2.box, 'xml ')
+        if xml_ is not None:
+            jp2.box[jp2.box.index(xml_)] = glymur.jp2box.XMLBox(xml_.xml)
+
+            tmp = tempfile.NamedTemporaryFile().name
+            jp2_xml = jp2.wrap(tmp, boxes=jp2.box)
+            os.rename(tmp, filepath)
+
     tmp = filepath + '.tmp.jp2'
 
     # Base command
-
     command ='kdu_transcode -i %s -o %s' % (filepath, tmp)
     # Corder
     if corder is not None:
@@ -33,59 +44,26 @@ def _transcode( filepath, corder='RPCL', orggen_plt='yes', cprecincts=None):
     # Hide output
     command += " >/dev/null"
 
-    # Execute kdu_transcode (retry up to five times)
-    num_retries = 0
-    while not os.path.isfile(tmp) and num_retries <= 5:
-        os.system(command)
-        num_retries += 1
-    # If transcode failed, raise an exception
-    print tmp
+    # Execute kdu_transcode
+    os.system(command)
     if not os.path.isfile(tmp):
-        raise KduTranscodeError(filepath)
+        raise KduTranscodeError(filepath) # nonsense
 
-    # Remove old version and replace with transcoded one
-    # OSError
+    # Replace old version with transcoded one
     os.rename(tmp, filepath)
-
-def transcode(filepath, xml_rewrite):
-    print filepath
-
-    if xml_rewrite:
-        jp2 = glymur.Jp2k(filepath)
-        xml_ = first_box(jp2.box, 'xml ')
-        if xml_ is not None:
-            jp2.box[jp2.box.index(xml_)] = glymur.jp2box.XMLBox(xml_.xml)
-
-            tmp = tempfile.NamedTemporaryFile().name
-            jp2_xml = jp2.wrap(tmp, boxes=jp2.box)
-            os.rename(tmp, filepath)
-
-    try:
-        image_params = sunpy.read_header(filepath)
-    except:
-        pass
-    else:
-        #try:
-        if image_params['instrument'] == "AIA":
-            _transcode(filepath, cprecincts=[128, 128])
-        else:
-            _transcode(filepath, cprecincts=[128, 128])
-        #_transcode(filepath)
-    #except KduTranscodeError, e:
-    #    logging.warning("kdu_transcode: " + e.get_message())
 
 def get_recursive_file_list(rootdir):
     """Get all files in a given directory recursively."""
     fileList = []
     for r,d,f in os.walk(rootdir):
         for fs in f:
-            fileList.append(os.path.join(r,fs))
+            fileList.append(os.path.join(r, fs))
     return fileList
 
-parser = argparse.ArgumentParser(description='This script is used to transcode jpeg2000 files.')
+parser = argparse.ArgumentParser(description='This script is used to transcode HV JP2 files.')
 parser.add_argument('-d', '--directory', metavar='base_dir', help='The directory to transcode', required=True)
 parser.add_argument('-x', '--xml-rewrite', help='Rewrite XML box', action='store_true')
 args = parser.parse_args()
 
 for path in get_recursive_file_list(args.directory):
-    transcode(path, args.xml_rewrite)
+    transcode(path, cprecincts=[128, 128], xml_rewrite=args.xml_rewrite)
