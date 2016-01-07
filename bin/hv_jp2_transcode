@@ -1,0 +1,76 @@
+#!/usr/bin/env python
+
+import argparse
+import logging
+import os
+import sys
+import sunpy
+
+def _transcode( filepath, corder='RPCL', orggen_plt='yes', cprecincts=None):
+    """Transcodes JPEG 2000 images to allow support for use with JHelioviewer
+    and the JPIP server"""
+    tmp = filepath + '.tmp.jp2'
+
+    # Base command
+
+    command ='kdu_transcode -i %s -o %s' % (filepath, tmp)
+    # Corder
+    if corder is not None:
+        command += " Corder=%s" % corder
+
+    # ORGgen_plt
+    if orggen_plt is not None:
+        command += " ORGgen_plt=%s" % orggen_plt
+
+    # Cprecincts
+    if cprecincts is not None:
+        command += " Cprecincts=\{%d,%d\}" % (cprecincts[0], cprecincts[1])
+
+    # Hide output
+    command += " >/dev/null"
+
+    # Execute kdu_transcode (retry up to five times)
+    num_retries = 0
+    while not os.path.isfile(tmp) and num_retries <= 5:
+        os.system(command)
+        num_retries += 1
+    # If transcode failed, raise an exception
+    print tmp
+    if not os.path.isfile(tmp):
+        raise KduTranscodeError(filepath)
+
+    # Remove old version and replace with transcoded one
+    # OSError
+    os.remove(filepath)
+    os.rename(tmp, filepath)
+
+def transcode(filepath):
+    print filepath
+    try:
+        image_params = sunpy.read_header(filepath)
+    except:
+        pass
+    else:
+        #try:
+        if image_params['instrument'] == "AIA":
+            _transcode(filepath, cprecincts=[128, 128])
+        else:
+            _transcode(filepath, cprecincts=[128, 128])
+        #_transcode(filepath)
+    #except KduTranscodeError, e:
+    #    logging.warning("kdu_transcode: " + e.get_message())
+
+def get_recursive_file_list(rootdir):
+    """Get all files in a given directory recursively."""
+    fileList = []
+    for r,d,f in os.walk(rootdir):
+        for fs in f:
+            fileList.append(os.path.join(r,fs))
+    return fileList
+
+parser = argparse.ArgumentParser(description='This script is used to transcode jpeg2000 files.')
+parser.add_argument('-d', '--directory', metavar='base_dir', help='The directory to transcode', required=True)
+args = parser.parse_args()
+
+for path in get_recursive_file_list(args.directory):
+    transcode(path)
