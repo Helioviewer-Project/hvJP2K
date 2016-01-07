@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 
 import argparse
+import glymur
 import logging
 import os
 import sys
-import sunpy
+#import sunpy
+import tempfile
+
+from hvJP2K.jp2.jp2_common import first_box
 
 def _transcode( filepath, corder='RPCL', orggen_plt='yes', cprecincts=None):
     """Transcodes JPEG 2000 images to allow support for use with JHelioviewer
@@ -41,11 +45,21 @@ def _transcode( filepath, corder='RPCL', orggen_plt='yes', cprecincts=None):
 
     # Remove old version and replace with transcoded one
     # OSError
-    os.remove(filepath)
     os.rename(tmp, filepath)
 
-def transcode(filepath):
+def transcode(filepath, xml_rewrite):
     print filepath
+
+    if xml_rewrite:
+        jp2 = glymur.Jp2k(filepath)
+        xml_ = first_box(jp2.box, 'xml ')
+        if xml_ is not None:
+            jp2.box[jp2.box.index(xml_)] = glymur.jp2box.XMLBox(xml_.xml)
+
+            tmp = tempfile.NamedTemporaryFile().name
+            jp2_xml = jp2.wrap(tmp, boxes=jp2.box)
+            os.rename(tmp, filepath)
+
     try:
         image_params = sunpy.read_header(filepath)
     except:
@@ -70,7 +84,8 @@ def get_recursive_file_list(rootdir):
 
 parser = argparse.ArgumentParser(description='This script is used to transcode jpeg2000 files.')
 parser.add_argument('-d', '--directory', metavar='base_dir', help='The directory to transcode', required=True)
+parser.add_argument('-x', '--xml-rewrite', help='Rewrite XML box', action='store_true')
 args = parser.parse_args()
 
 for path in get_recursive_file_list(args.directory):
-    transcode(path)
+    transcode(path, args.xml_rewrite)
