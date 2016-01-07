@@ -9,23 +9,11 @@ import tempfile
 
 from hvJP2K.jp2.jp2_common import first_box
 
-def transcode(filepath, corder='RPCL', orggen_plt='yes', cprecincts=None, xml_rewrite=False):
+def transcode(filepath, corder='RPCL', orggen_plt='yes', cprecincts=[128, 128], xml_rewrite=False):
     """Transcodes JPEG 2000 images to allow support for use with JHelioviewer
     and the JPIP server"""
 
-    print filepath
-
-    if xml_rewrite:
-        jp2 = glymur.Jp2k(filepath)
-        xml_ = first_box(jp2.box, 'xml ')
-        if xml_ is not None:
-            jp2.box[jp2.box.index(xml_)] = glymur.jp2box.XMLBox(xml_.xml)
-
-            tmp = tempfile.NamedTemporaryFile().name
-            jp2_xml = jp2.wrap(tmp, boxes=jp2.box)
-            os.rename(tmp, filepath)
-
-    tmp = filepath + '.tmp.jp2'
+    tmp = tempfile.NamedTemporaryFile(suffix='.j2c').name
 
     # Base command
     command ='kdu_transcode -i %s -o %s' % (filepath, tmp)
@@ -47,10 +35,22 @@ def transcode(filepath, corder='RPCL', orggen_plt='yes', cprecincts=None, xml_re
     # Execute kdu_transcode
     os.system(command)
     if not os.path.isfile(tmp):
-        raise KduTranscodeError(filepath) # nonsense
+        raise Exception('kdu_transcode: ' + filepath)
 
-    # Replace old version with transcoded one
-    os.rename(tmp, filepath)
+    j2c = glymur.Jp2k(tmp)
+    jp2 = glymur.Jp2k(filepath)
+
+    jp2_cs = first_box(jp2.box, 'jp2c')
+    jp2.box[jp2.box.index(jp2_cs)] = glymur.jp2box.ContiguousCodestreamBox(j2c.get_codestream())
+
+    if xml_rewrite:
+        xml_ = first_box(jp2.box, 'xml ')
+        if xml_ is not None:
+            jp2.box[jp2.box.index(xml_)] = glymur.jp2box.XMLBox(xml_.xml)
+
+    tmp2 = tempfile.NamedTemporaryFile().name
+    j2c.wrap(tmp2, boxes=jp2.box)
+    os.rename(tmp2, filepath)
 
 def get_recursive_file_list(rootdir):
     """Get all files in a given directory recursively."""
@@ -66,4 +66,4 @@ parser.add_argument('-x', '--xml-rewrite', help='Rewrite XML box', action='store
 args = parser.parse_args()
 
 for path in get_recursive_file_list(args.directory):
-    transcode(path, cprecincts=[128, 128], xml_rewrite=args.xml_rewrite)
+    transcode(path, xml_rewrite=args.xml_rewrite)
