@@ -4,6 +4,7 @@ import argparse
 import glymur
 import logging
 import os
+import shutil
 import sys
 import tempfile
 
@@ -50,7 +51,7 @@ def transcode(filepath, corder='RPCL', orggen_plt='yes', cprecincts=[128, 128], 
 
     tmp2 = tempfile.NamedTemporaryFile().name
     j2c.wrap(tmp2, boxes=jp2.box)
-    os.rename(tmp2, filepath)
+    shutil.move((tmp2, filepath)
 
 def get_recursive_file_list(rootdir):
     """Get all files in a given directory recursively."""
