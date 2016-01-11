@@ -1,0 +1,25 @@
+#! /bin/sh
+
+function file_size {
+    echo $(wc -c "$1" | awk '{ print $1 }')
+}
+
+function do_test {
+    cp -R orig tst
+
+    REF=trans/$1
+    SREF=$(file_size $REF)
+
+    /swhv/python/bin/hv_jp2_transcode -d tst -x
+
+    TST=tst/$1
+    STST=$(file_size $TST)
+
+    CMP=$(cmp -s "$TST" "$REF")
+    RES=fail
+    if [ $STST == $SREF ] && [ $? -eq 0 ]; then RES=pass; fi
+    echo $RES: $1
+    rm -fr tst
+}
+
+do_test 2015_12_21__00_10_34_34__SDO_AIA_AIA_171.jp2
