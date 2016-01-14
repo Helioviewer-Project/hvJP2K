@@ -15,7 +15,6 @@ kwargs = {'name': 'hvJP2K',
 
 instllrqrs = ['cython', 'numpy', 'lxml>=2.3', 'pillow', 'glymur>=0.5.10']
 # jpylyzer>=1.11.2 - doesn't work
-# sunpy not good
 kwargs['install_requires'] = instllrqrs
 
 clssfrs = ["Programming Language :: Python",
