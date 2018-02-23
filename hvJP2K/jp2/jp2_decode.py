@@ -34,7 +34,7 @@ def jp2_decode(name_in, name_out, xml=False, rlevel=0, area=None,
         area[3] *= xsiz
         area = [int(n + .5) for n in area]
 
-    rlevel = np.clip(rlevel, 0, code.segment[2].spcod[4])
+    rlevel = np.clip(rlevel, 0, code.segment[2].num_res)
 
     # exception for zero size image
     data = jp2.read(verbose=verbose, rlevel=rlevel, area=area,

@@ -20,6 +20,7 @@ args = parser.parse_args()
 
 config.outputVerboseFlag = args.verbose
 config.extractNullTerminatedXMLFlag = True
+config.inputWrapperFlag = True
 
 xmlTree = let.fromstring(cet.tostring(jpylyzer.checkOneFile(args.i)))
 # print(let.tostring(xmlTree))

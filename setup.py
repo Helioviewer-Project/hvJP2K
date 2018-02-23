@@ -13,8 +13,7 @@ kwargs = {'name': 'hvJP2K',
           'scripts': ['bin/hv_jp2_decode', 'bin/hv_jp2_encode', 'bin/hv_jp2_verify', 'bin/hv_jpx_merge', 'bin/hv_jpx_merged', 'bin/hv_jpx_split', 'bin/hv_jp2_transcode'],
           'license': 'MIT'}
 
-instllrqrs = ['cython', 'numpy', 'lxml>=2.3', 'pillow', 'glymur>=0.5.10']
-# jpylyzer>=1.11.2 - doesn't work
+instllrqrs = ['cython', 'numpy', 'lxml>=2.3', 'pillow', 'glymur>=0.5.10', 'jpylyzer>=1.18']
 kwargs['install_requires'] = instllrqrs
 
 clssfrs = ["Programming Language :: Python",

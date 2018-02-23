@@ -2,8 +2,6 @@
 <!--
     HelioViewer File Format Verification Facility (HVFFVF)
     v0.2 preliminary
-
-    $Id$
 -->
 <iso:schema xmlns="http://purl.oclc.org/dsdl/schematron" xmlns:iso="http://purl.oclc.org/dsdl/schematron" queryBinding="xslt" schemaVersion="iso">
     <iso:title>Check for HV JP2 compliance</iso:title>
