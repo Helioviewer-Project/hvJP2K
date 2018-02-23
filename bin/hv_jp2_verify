@@ -5,6 +5,14 @@ from __future__ import print_function
 import argparse
 import sys
 
+import jpylyzer.boxvalidator as bv
+
+func_validate_xmlBox = getattr(bv.BoxValidator, "validate_xmlBox")
+
+def override_xmlBox(self):
+    self.boxContents = self.boxContents.rstrip(b'\x00')
+    return func_validate_xmlBox(self)
+
 import xml.etree.cElementTree as cet
 from lxml import etree as let
 from lxml import isoschematron as iso
@@ -15,8 +23,12 @@ from hvJP2K.jp2.data import *
 parser = argparse.ArgumentParser(description='Verify JP2 files for Helioviewer conformance.')
 parser.add_argument('-i', metavar='jp2file', help='input JP2 filename', required=True)
 parser.add_argument('-schema', metavar='schfile', help='alternate Schematron filename')
+parser.add_argument('-n', '--nullxml', help='allow null-terminated XML box', action='store_true')
 parser.add_argument('-v', '--verbose', help='verbose operation', action='store_true')
 args = parser.parse_args()
+
+if args.nullxml:
+    bv.BoxValidator.validate_xmlBox = override_xmlBox
 
 config.outputVerboseFlag = args.verbose
 config.extractNullTerminatedXMLFlag = True
