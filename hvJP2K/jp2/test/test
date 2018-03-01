@@ -9,7 +9,10 @@ function do_test {
     SREF=$(file_size $REF)
 
     TST=test.ppm
-    /swhv/python/bin/hv_jp2_decode -i $1 -o $TST -region \{0.6,0.1\},\{0.3,0.5\} -reduce 2
+
+    PRE=~/hvJP2K/bin
+    $PRE/hv_jp2_decode -i $1 -o $TST -region \{0.6,0.1\},\{0.3,0.5\} -reduce 2
+
     STST=$(file_size $TST)
 
     CMP=$(cmp -s "$TST" "$REF")
