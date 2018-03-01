@@ -10,7 +10,8 @@ function do_test {
     REF=trans/$1
     SREF=$(file_size $REF)
 
-    /swhv/python/bin/hv_jp2_transcode -d tst -x
+    PRE=~/hvJP2K/bin
+    $PRE/hv_jp2_transcode -d tst -x
 
     TST=tst/$1
     STST=$(file_size $TST)
