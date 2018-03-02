@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const char *socket_path = "/swhv/tmp/merged_socket";
+static const char *socket_path = "/tmp/hv_jpx_merged_socket";
 
 #define BUF_SIZE 1024
 

@@ -30,6 +30,7 @@ function do_test {
     done
 
     cd ..
+    rm -fr $1-test
 }
 
 do_test aia
