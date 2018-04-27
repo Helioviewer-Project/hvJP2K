@@ -10,7 +10,7 @@ kwargs = {'name': 'hvJP2K',
           'ext_modules': cythonize(['hvJP2K/jp2/jp2_common.pyx', 'hvJP2K/jpx/jpx_common.pyx', 'hvJP2K/jpx/jpx_mmap.pyx', 'hvJP2K/jpx/jpx_merge.py']),
           'packages': ['hvJP2K', 'hvJP2K.jp2', 'hvJP2K.jp2.data', 'hvJP2K.jpx'],
           'package_data': {'hvJP2K.jp2': ['data/*.sch', 'test/*.jp2', 'test/*.ppm'], 'hvJP2K.jpx': ['test/*/*.jp2', 'test/*/*.jpx']},
-          'scripts': ['bin/hv_jp2_decode', 'bin/hv_jp2_encode', 'bin/hv_jp2_verify', 'bin/hv_jpx_merge', 'bin/hv_jpx_merged', 'bin/hv_jpx_split', 'bin/hv_jp2_transcode'],
+          'scripts': ['bin/hv_jp2_decode', 'bin/hv_jp2_encode', 'bin/hv_jp2_verify', 'bin/hv_jpx_merge', 'bin/hv_jpx_merged', 'bin/hv_jpx_split', 'bin/hv_jp2_transcode', 'bin/hv_jpx_merge_from_db', 'bin/hv_jpx_merge_to_db'],
           'license': 'MIT'}
 
 instllrqrs = ['cython', 'numpy', 'lxml>=2.3', 'pillow', 'glymur>=0.5.10', 'jpylyzer>=1.18']

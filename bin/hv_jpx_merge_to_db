@@ -1,0 +1,32 @@
+#!/usr/bin/env python
+
+import argparse
+import fileinput
+import sys
+
+from hvJP2K.jpx.jpx_merge import jpx_merge_to_db
+
+parser = argparse.ArgumentParser(description='Merge JP2 files into JPX files.')
+parser.add_argument('-i', metavar='jp2file1,jp2file2,...', help='comma separated input JP2 filenames', nargs='+')
+parser.add_argument('-s', metavar='argfile', help='read arguments from file')
+args = parser.parse_args()
+
+if args.s:
+    arg_strings = []
+    for line in fileinput.input(args.s):
+        for arg in line.split():
+            if not arg.strip():
+                continue
+            arg_strings.append(arg)
+    # reparse with possible new arguments
+    args = parser.parse_args(sys.argv[1:] + arg_strings)
+
+if args.i is None:
+    print('hv_jpx_merge: error: argument -i is required')
+    sys.exit(1)
+
+names = (name.encode() for name in args.i if name)
+names_in = [name for name in b','.join(names).split(b',')]
+
+jpx_merge_to_db(names_in)
+
