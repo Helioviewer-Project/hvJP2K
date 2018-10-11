@@ -12,3 +12,7 @@ A collection of JPEG2000 tools useful for the Helioviewer Project:
 - `hv_jpx_split` -- split JPX movies into standalone JP2 files.
 
 This software is mainly written in Python and is based on the [glymur](https://github.com/quintusdias/glymur/) and [jpylyzer](https://github.com/openpreserve/jpylyzer/) libraries.
+
+## Installation
+
+A bootstrap script that assumes Python 3 is provided.
