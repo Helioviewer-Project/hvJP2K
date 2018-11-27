@@ -16,7 +16,11 @@ from . import jpx_common, jpx_mmap
 import sqlite3
 import os.path 
 from io import BytesIO
-DBNAME = '/data/test.db'
+import os
+DBNAME = '/data/sqlite/swhv_headers.db'
+JPX_HEADER_DB = 'JPX_HEADER_DB'
+if JPX_HEADER_DB in os.environ:
+    DBNAME = os.environ[JPX_HEADER_DB]
 
 # override glymur box parsing
 jp2box._BOX_WITH_ID[b'jP  '] = jpx_common.hvJPEG2000SignatureBox()
@@ -201,7 +205,7 @@ def write_jpch_jplh_db(jp2h):
 # @profile
 def jpx_merge_to_db(names_in):
     dbexists = os.path.isfile(DBNAME)
-    conn = sqlite3.connect(DBNAME)
+    conn = sqlite3.connect(DBNAME, timeout=120)
     if not dbexists:
         conn.execute('''CREATE TABLE JP2DATA (jp2name TEXT PRIMARY KEY, jpch_jplh BLOB, jpch_jplhdiff, ftbl_offset INTEGER, ftbl_length INTEGER, dtbl BLOB, asoc BLOB);''')
 
@@ -293,9 +297,10 @@ def jpx_merge_to_db(names_in):
         finally:
             ifile.close()
     conn.commit()
+    conn.close()
 
 def jpx_merge_from_db(names_in, jpxname):
-    conn = sqlite3.connect(DBNAME)
+    conn = sqlite3.connect(DBNAME, timeout=120)
     cur = conn.cursor()
     first = True
     names_list = b""
@@ -362,11 +367,13 @@ def jpx_merge_from_db(names_in, jpxname):
     dtblfull = join_buffers(dtbl)
     jpx_write(struct_pack('>I4sH', 10 + len(dtblfull), b'dtbl', len(results)))
     jpx_write(dtblfull)
+    jpx.close()
+    conn.close()
 """    
     ftbl_full = b''.join(ftbl)
     jpx_write(ftbl_full)
-    jpx.close()
 """
+
 def join_buffers(bufs):
     if sys.version_info[0] < 3:
         bufs = [str(buf) for buf in bufs]
