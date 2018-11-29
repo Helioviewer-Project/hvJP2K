@@ -118,12 +118,12 @@ def jpx_merge(names_in, jpxname, links):
 
             # asoc
             if xml_ is not None:
-                asoc.append(struct_pack('>I4sI4sII',
+                jpx_write(struct_pack('>I4sI4sII',
                                     # asoc 8 + 16
                                     24 + xml_.length, b'asoc',
                                     # nlst 8 + 4 + 4
                                     16, b'nlst', 0x01000000+i, 0x02000000+i))
-                asoc.append(xml_.xmlbuf)
+                jpx_write(xml_.xmlbuf)
 
             # identical JP2 header, typical
             if head0 == jp2h.header:
@@ -158,8 +158,8 @@ def jpx_merge(names_in, jpxname, links):
 
     # 8 + asoc size
     asoc_full = b''.join(asoc)
-    jpx_write(struct_pack('>I4s', 8 + len(asoc_full), b'asoc'))
-    jpx_write(asoc_full)
+    #jpx_write(struct_pack('>I4s', 8 + len(asoc_full), b'asoc'))
+    #jpx_write(asoc_full)
 
     if links:
         # 8 + 2 + dtbl size
@@ -222,7 +222,6 @@ def jpx_merge_to_db(names_in):
     empty_jpch_jplh = struct_pack('>I4sI4s', 8, b'jpch', 8, b'jplh')
 
     # asoc stream
-    asoc = []
     # dtbl stream
     dtbl = []
 
@@ -257,17 +256,9 @@ def jpx_merge_to_db(names_in):
 
             # asoc
             if xml_ is not None:
-                asoc.append(struct_pack('>I4sI4sII',
-                                    # asoc 8 + 16
-                                    24 + xml_.length, b'asoc',
-                                    # nlst 8 + 4 + 4
-                                    16, b'nlst', 0x01000000+i, 0x02000000+i))
-                asoc.append(xml_.xmlbuf)
                 asoci = struct_pack('>I4sI4sII',
-                                    # asoc 8 + 16
-                                    24 + xml_.length, b'asoc',
-                                    # nlst 8 + 4 + 4
-                                    16, b'nlst', 0x01000000+i, 0x02000000+i) + xml_.xmlbuf
+                           24 + xml_.length, b'asoc',
+                           16, b'nlst', 0x01000000+i, 0x02000000+i) + xml_.xmlbuf
 
             # identical JP2 header, typical
             jpch_jplh = jp2h.header[:] + empty_jpch_jplh
@@ -287,7 +278,7 @@ def jpx_merge_to_db(names_in):
             dtbli = struct_pack('>I4sI', 12 + len(url_), b'url ', 0) + url_
 
             v = (
-                    sqlite3.Binary(bytes(jp2name)),
+                    jp2name.decode('utf-8'),
                     sqlite3.Binary(bytes(jpch_jplh)), 
                     sqlite3.Binary(bytes(jpch_jplhdiff)), 
                     ftbl_offset, ftbl_length, 
@@ -300,8 +291,6 @@ def jpx_merge_to_db(names_in):
     conn.close()
 
 def jpx_merge_from_db(names_in, jpxname):
-    conn = sqlite3.connect(DBNAME, timeout=120)
-    cur = conn.cursor()
     first = True
     names_list = b""
     for name in names_in:
@@ -314,8 +303,6 @@ def jpx_merge_from_db(names_in, jpxname):
     names_list += b")"
     if sys.version_info[0] >= 3:
         names_list = str(names_list,'utf-8')
-    cur.execute("SELECT * FROM JP2DATA WHERE CAST(jp2name AS TEXT) in " + names_list + " order by jp2name")
-    results = cur.fetchall()
     struct_pack = struct.pack
     ftbl_flst = struct_pack('>I4sI4sH', 8 + 8 + 2 + 14, b'ftbl', 8 + 2 + 14, b'flst', 1)
     empty_jpch_jplh = struct_pack('>I4sI4s', 8, b'jpch', 8, b'jplh')
@@ -325,18 +312,13 @@ def jpx_merge_from_db(names_in, jpxname):
     jpx_write = jpx.write
     jp2box.JPEG2000SignatureBox().write(jpx)
     jp2box.FileTypeBox(brand='jpx ', compatibility_list=('jpx ', 'jp2 ', 'jpxb')).write(jpx)
-
-    # asoc stream
-    asoc = []
     dtbl = []
-    # dtbl stream
-    #dtblfull = b''
-    #asocfull = b''
-    ftbl = []
-
     head0 = None
     i = 0
-    for r in results:
+    conn = sqlite3.connect(DBNAME, timeout=120)
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM JP2DATA WHERE jp2name in " + names_list + " order by jp2name")
+    for r in cur:
         jp2name_i = r[0]
         jpch_jplh_i = r[1]
         jpch_jplh_diff_i = r[2]
@@ -353,26 +335,16 @@ def jpx_merge_from_db(names_in, jpxname):
             else:
                 jpx_write(jpch_jplh_diff_i)
         ftbl_i = ftbl_flst + struct_pack('>QIH', ftbl_offset, ftbl_length, i + 1)
-        #ftbl.append(ftbl_i)
         jpx_write(ftbl_i)
         dtbl.append(dtbl_i)
-        asoc.append(asoc_i)
+        jpx_write(asoc_i)
         i = i + 1
 
-    # 8 + asoc size
-    asocfull = join_buffers(asoc)
-    jpx_write(struct_pack('>I4s', 8 + len(asocfull), b'asoc'))
-    jpx_write(asocfull)
-
     dtblfull = join_buffers(dtbl)
-    jpx_write(struct_pack('>I4sH', 10 + len(dtblfull), b'dtbl', len(results)))
+    jpx_write(struct_pack('>I4sH', 10 + len(dtblfull), b'dtbl', len(dtbl)))
     jpx_write(dtblfull)
     jpx.close()
     conn.close()
-"""    
-    ftbl_full = b''.join(ftbl)
-    jpx_write(ftbl_full)
-"""
 
 def join_buffers(bufs):
     if sys.version_info[0] < 3:
