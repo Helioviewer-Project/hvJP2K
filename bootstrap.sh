@@ -2,7 +2,7 @@
 
 dir=~/hvJP2K
 
-python -m venv ${dir}
+python3 -m venv ${dir}
 ${dir}/bin/pip install cython
 ${dir}/bin/pip install --upgrade .
 

@@ -30,9 +30,10 @@ args = parser.parse_args()
 if args.nullxml:
     bv.BoxValidator.validate_xmlBox = override_xmlBox
 
-config.outputVerboseFlag = args.verbose
-config.extractNullTerminatedXMLFlag = True
-config.inputWrapperFlag = True
+config.OUTPUT_VERBOSE_FLAG = args.verbose
+config.EXTRACT_NULL_TERMINATED_XML_FLAG = True
+config.INPUT_WRAPPER_FLAG = True
+config.LEGACY_XML_FLAG = True
 
 xmlTree = let.fromstring(cet.tostring(jpylyzer.checkOneFile(args.i)))
 # print(let.tostring(xmlTree))
