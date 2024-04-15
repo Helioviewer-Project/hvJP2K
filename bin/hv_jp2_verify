@@ -23,7 +23,6 @@ from hvJP2K.jp2.data import *
 parser = argparse.ArgumentParser(description='Verify JP2 files for Helioviewer conformance.')
 parser.add_argument('-i', metavar='jp2file', help='input JP2 filename', required=True)
 parser.add_argument('-schema', metavar='schfile', help='alternate Schematron filename')
-parser.add_argument('-v', '--verbose', help='verbose operation', action='store_true')
 args = parser.parse_args()
 
 bv.BoxValidator.validate_xmlBox = override_xmlBox
