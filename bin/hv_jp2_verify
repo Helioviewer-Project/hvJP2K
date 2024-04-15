@@ -23,17 +23,10 @@ from hvJP2K.jp2.data import *
 parser = argparse.ArgumentParser(description='Verify JP2 files for Helioviewer conformance.')
 parser.add_argument('-i', metavar='jp2file', help='input JP2 filename', required=True)
 parser.add_argument('-schema', metavar='schfile', help='alternate Schematron filename')
-parser.add_argument('-n', '--nullxml', help='allow null-terminated XML box', action='store_true')
 parser.add_argument('-v', '--verbose', help='verbose operation', action='store_true')
 args = parser.parse_args()
 
-if args.nullxml:
-    bv.BoxValidator.validate_xmlBox = override_xmlBox
-
-config.OUTPUT_VERBOSE_FLAG = args.verbose
-config.EXTRACT_NULL_TERMINATED_XML_FLAG = True
-config.INPUT_WRAPPER_FLAG = True
-config.LEGACY_XML_FLAG = True
+bv.BoxValidator.validate_xmlBox = override_xmlBox
 
 xmlTree = let.fromstring(cet.tostring(jpylyzer.checkOneFile(args.i)))
 # print(let.tostring(xmlTree))

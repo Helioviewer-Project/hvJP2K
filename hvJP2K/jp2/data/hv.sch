@@ -1,38 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
     HelioViewer File Format Verification Facility (HVFFVF)
-    v0.2 preliminary
+    v0.3 preliminary for jpylyzer>=2.2
 -->
 <iso:schema xmlns="http://purl.oclc.org/dsdl/schematron" xmlns:iso="http://purl.oclc.org/dsdl/schematron" queryBinding="xslt" schemaVersion="iso">
     <iso:title>Check for HV JP2 compliance</iso:title>
     <iso:pattern>
         <!-- checks on jpylyzer output -->
-        <!-- check presence of jpylyzer element -->
-        <iso:rule context="/">
-            <iso:assert test="jpylyzer">no jpylyzer element found</iso:assert>
-        </iso:rule>
         <!-- check presence of isValidJP2 element with the text 'True' -->
-        <iso:rule context="/jpylyzer">
-            <iso:assert test="isValidJP2 = 'True'">not valid JP2</iso:assert>
+        <iso:rule context="/isValid">
+            <iso:assert test="@format = 'jp2' and text() = 'True'">not valid JP2</iso:assert>
         </iso:rule>
         <!-- check jpylyzer validation of xmlBox if there -->
-        <iso:rule context="/jpylyzer/tests/xmlBox">
+        <iso:rule context="/tests/xmlBox">
             <iso:assert test="containsWellformedXML != 'False'">malformed XML metadata</iso:assert>
         </iso:rule>
         <!-- checks presence and structure of xmlBox element -->
-        <!-- context="/jpylyzer" -->
-        <iso:rule context="properties">
+        <iso:rule context="/properties">
             <iso:assert test="xmlBox">no XML box</iso:assert>
         </iso:rule>
-        <iso:rule context="properties/xmlBox">
+        <iso:rule context="/properties/xmlBox">
             <iso:assert test="meta">meta missing</iso:assert>
             <iso:assert test="meta/fits">meta/fits missing</iso:assert>
             <iso:assert test="meta/helioviewer">meta/helioviewer missing</iso:assert>
         </iso:rule>
         <!-- checks on XML metadata -->
-        <!-- context="/jpylyzer/properties/xmlBox/meta" -->
         <!-- old style -->
-        <iso:rule context="fits">
+        <iso:rule context="/properties/xmlBox/meta/fits">
             <!-- dataset id -->
             <iso:assert test="TELESCOP">keyword missing: TELESCOP</iso:assert>
             <iso:assert test="INSTRUME">keyword missing: INSTRUME</iso:assert>
@@ -46,7 +40,7 @@
             <iso:assert test="CRPIX2">keyword missing: CRPIX2</iso:assert>
         </iso:rule>
         <!-- filename check -->
-        <iso:rule context="fits">
+        <iso:rule context="/properties/xmlBox/meta/fits">
             <iso:let name="date-obs" value="replace(translate(substring-before(DATE-OBS, '.'), '-:', '__'), 'T', '__')"/>
             <iso:let name="telescop" value="replace(TELESCOP, '/', '_')"/>
             <iso:let name="invalid-detector" value="INSTRUME = 'SWAP' or not(DETECTOR)"/>
@@ -55,23 +49,20 @@
             <iso:assert test="$filename = /jpylyzer/fileInfo/fileName">invalid filename</iso:assert>
         </iso:rule>
         <!-- checks on codestream parameters -->
-        <!-- context="/jpylyzer/properties/contiguousCodestreamBox" -->
         <!-- SIZ -->
-        <iso:rule context="siz">
+        <iso:rule context="/properties/contiguousCodestreamBox/siz">
             <!-- single tile -->
             <iso:assert test="numberOfTiles = 1">tiled image</iso:assert>
         </iso:rule>
         <!-- COD -->
-        <iso:rule context="cod">
+        <iso:rule context="/properties/contiguousCodestreamBox/cod">
             <!-- precincts -->
-            <iso:assert test="precincts = 'yes'">no precincts</iso:assert>
-            <iso:assert test="precincts != 'yes' or precinctSizeX &gt; 127">invalid precinct X size</iso:assert>
-            <iso:assert test="precincts != 'yes' or precinctSizeY &gt; 127">invalid precinct Y size</iso:assert>
+            <iso:assert test="precincts = 'yes' or 'user defined'">no precincts</iso:assert>
             <!-- progression order -->
             <iso:assert test="order = 'RPCL'">wrong progression order</iso:assert>
         </iso:rule>
         <!-- tiles -->
-        <iso:rule context="tileParts">
+        <iso:rule context="/properties/contiguousCodestreamBox/tileParts">
             <!-- PLT markers -->
             <iso:assert test="tilePart/pltCount &gt; 0">missing PLT markers</iso:assert>
         </iso:rule>

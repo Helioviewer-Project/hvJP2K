@@ -13,7 +13,7 @@ kwargs = {'name': 'hvJP2K',
           'scripts': ['bin/hv_jp2_decode', 'bin/hv_jp2_encode', 'bin/hv_jp2_verify', 'bin/hv_jpx_merge', 'bin/hv_jpx_merged', 'bin/hv_jpx_split', 'bin/hv_jp2_transcode'],
           'license': 'MIT'}
 
-instllrqrs = ['cython', 'numpy', 'lxml>=2.3', 'pillow', 'glymur>=0.5.10', 'jpylyzer==2.1.0']
+instllrqrs = ['cython', 'numpy', 'lxml>=2.3', 'pillow', 'glymur>=0.5.10', 'jpylyzer==2.2.0']
 kwargs['install_requires'] = instllrqrs
 
 clssfrs = ["Programming Language :: Python",
@@ -28,6 +28,6 @@ clssfrs = ["Programming Language :: Python",
            "Topic :: Software Development :: Libraries :: Python Modules"]
 kwargs['classifiers'] = clssfrs
 
-kwargs['version'] = '0.5'
+kwargs['version'] = '0.6'
 
 setup(**kwargs)
