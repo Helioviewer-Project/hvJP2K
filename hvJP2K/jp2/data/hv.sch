@@ -73,7 +73,7 @@
         <!-- tiles -->
         <iso:rule context="tileParts">
             <!-- PLT markers -->
-            <iso:assert test="tilePart/pltCount &gt; 0">missing PLT markers</iso:assert>
+            <iso:assert test="tilePart/plt">missing PLT markers</iso:assert>
         </iso:rule>
     </iso:pattern>
 </iso:schema>
