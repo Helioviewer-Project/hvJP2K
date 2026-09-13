@@ -1,3 +1,46 @@
 [build-system]
-requires = ["setuptools>=77", "wheel", "Cython>=3.0"]
+requires = ["setuptools>=77", "Cython>=3.0"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "hvJP2K"
+version = "0.6"
+description = "JPEG 2000 tools for the Helioviewer Project"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "SWHV ROB", email = "swhv@oma.be" },
+]
+dependencies = [
+    "astropy>=6.0",
+    "glymur>=0.14.2",
+    "jpylyzer==2.2.1",
+    "lxml>=5.0",
+    "numpy>=1.26",
+    "pillow>=10.0",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/Helioviewer-Project/hvJP2K"
+
+[tool.setuptools]
+packages = ["hvJP2K", "hvJP2K.jp2", "hvJP2K.jp2.data", "hvJP2K.jpx"]
+include-package-data = false
+
+[tool.setuptools.package-data]
+"hvJP2K.jp2" = ["data/*.sch"]
+
+[tool.black]
+target-version = ["py311"]
