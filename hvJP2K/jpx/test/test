@@ -13,6 +13,7 @@ else
     merge=hv_jpx_merge
     split=hv_jpx_split
 fi
+python=${HVJP2K_PYTHON:-python3}
 
 for name in aia swap hetero; do
     cp -R "$test_dir/$name-ref" "$work_root/$name-ref"
@@ -24,8 +25,24 @@ for name in aia swap hetero; do
     "$merge" -i ./*.jp2 -o "$name-hv.jpx"
     "$merge" -i ../"$name-ref"/*.jp2 -o "$name-hv-links.jpx" -links
 
-    for output in ./*; do
+    for output in ./*.jp2; do
         cmp "$output" "../$name-ref/$(basename "$output")"
+    done
+    "$python" "$test_dir/validate.py" embedded "$name-hv.jpx" ./*.jp2
+    "$python" "$test_dir/validate.py" linked "$name-hv-links.jpx" ../"$name-ref"/*.jp2
+
+    mkdir roundtrip
+    cd roundtrip
+    "$split" -i ../"$name-hv.jpx"
+    for output in ./*.jp2; do
+        cmp "$output" "../../$name-ref/$(basename "$output")"
     done
     echo "pass: $name"
 done
+
+mkdir "$work_root/linked input"
+cp "$test_dir/aia-ref/000.jp2" "$work_root/linked input/a #1.jp2"
+cd "$work_root"
+"$merge" -i "linked input/a #1.jp2" -o escaped-link.jpx -links
+"$python" "$test_dir/validate.py" linked escaped-link.jpx "linked input/a #1.jp2"
+echo "pass: escaped link"

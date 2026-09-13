@@ -39,46 +39,64 @@ def jpx_split(jpxname):
 
         jp2h0 = jp2h0.hv_parse(ifile)
         ihdr0 = first_box(jp2h0, 'ihdr')
-        colr0 = first_box(jp2h0, 'colr')
+        bpcc0 = first_box(jp2h0, 'bpcc')
+        colr0 = [box for box in jp2h0 if box.box_id == 'colr']
         pclr0 = first_box(jp2h0, 'pclr')
         cmap0 = first_box(jp2h0, 'cmap')
+        cdef0 = first_box(jp2h0, 'cdef')
+        res0 = first_box(jp2h0, 'res ')
 
         def jp2h_boxes(jpch, jplh):
             # fish for size/colour boxes in jpch and jplh
             ihdr = first_box(jpch, 'ihdr')
+            bpcc = first_box(jpch, 'bpcc')
             pclr = first_box(jpch, 'pclr')
             cmap = first_box(jpch, 'cmap')
 
             cgrp = first_box(jplh, 'cgrp')
-            colr = None if cgrp is None else first_box(cgrp.box, 'colr')
+            colr = [] if cgrp is None else [box for box in cgrp.box
+                                            if box.box_id == 'colr']
+            cdef = first_box(jplh, 'cdef')
+            res = first_box(jplh, 'res ')
 
             # replace missing boxes from the main jp2h
             if ihdr is None: ihdr = ihdr0
-            if colr is None: colr = colr0
+            if bpcc is None: bpcc = bpcc0
+            if not colr: colr = colr0
             if pclr is None: pclr = pclr0
             if cmap is None: cmap = cmap0
+            if cdef is None: cdef = cdef0
+            if res is None: res = res0
 
             # no mapping or direct mapping
             if cmap is None or sum(cmap.mapping_type) == 0:
                 pclr = None
                 cmap = None
 
-            return [box for box in (ihdr, colr, pclr, cmap) if box is not None]
+            colr = [jp2box.ColourSpecificationBox(method=box.method,
+                                                   precedence=box.precedence,
+                                                   approximation=0,
+                                                   colorspace=box.colorspace,
+                                                   icc_profile=box.icc_profile)
+                    for box in colr]
+            return ([box for box in (ihdr, bpcc) if box is not None] + colr +
+                    [box for box in (pclr, cmap, cdef, res) if box is not None])
 
         xmls = [None]*num
-        asoc_super = first_box(jpx, 'asoc')
-        if asoc_super is not None:
-            asoc = [x.box for x in asoc_super.box if x.box_id == 'asoc']
-            for box in asoc:
-                nlst = first_box(box, 'nlst')
-                xml_ = first_box(box, 'xml ')
-                if nlst is None or xml_ is None:
+        def read_associations(boxes):
+            for box in boxes:
+                if box.box_id != 'asoc':
                     continue
+                nlst = first_box(box.box, 'nlst')
+                xml_ = first_box(box.box, 'xml ')
+                if nlst is not None and xml_ is not None:
+                    for idx in nlst.associations:
+                        if (idx >> 24) == 1:
+                            xmls[idx & 0x00FFFFFF] = xml_.xmlbuf
+                else:
+                    read_associations(box.box)
 
-                for idx in nlst.associations:
-                    # codestream
-                    if (idx >> 24) == 1:
-                        xmls[idx & 0x00FFFFFF] = xml_.xmlbuf
+        read_associations(jpx)
 
         sign = jp2box.JPEG2000SignatureBox()
         ftyp = jp2box.FileTypeBox()
