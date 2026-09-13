@@ -1,5 +1,26 @@
+import os
+
 from Cython.Build import cythonize
 from setuptools import setup
+from distutils.ccompiler import new_compiler
+from distutils.command.build_scripts import build_scripts
+from distutils.sysconfig import customize_compiler
+
+
+class BuildScripts(build_scripts):
+    def run(self):
+        super().run()
+
+        compiler = new_compiler(force=self.force)
+        customize_compiler(compiler)
+        build_ext = self.get_finalized_command('build_ext')
+        source = 'bin/hv_jpx_mergec.c'
+        objects = compiler.compile([source], output_dir=build_ext.build_temp)
+        compiler.link_executable(
+            objects, os.path.join(self.build_dir, 'hv_jpx_mergec'))
+
+    def get_source_files(self):
+        return super().get_source_files() + ['bin/hv_jpx_mergec.c']
 
 with open("README.md", encoding="utf-8") as readme:
     long_description = readme.read()
@@ -25,6 +46,7 @@ setup(
     ),
     packages=["hvJP2K", "hvJP2K.jp2", "hvJP2K.jp2.data", "hvJP2K.jpx"],
     package_data={"hvJP2K.jp2": ["data/*.sch"]},
+    cmdclass={"build_scripts": BuildScripts},
     scripts=[
         "bin/hv_jp2_decode",
         "bin/hv_jp2_encode",

@@ -42,6 +42,10 @@ For the traditional self-contained installation under `~/hvJP2K`:
 - `hv_jp2_transcode -d directory` recursively transcodes JP2 files in place.
 - `hv_jpx_merge -i first.jp2 second.jp2 -o movie.jpx` creates an embedded JPX
   movie. Add `-links` to create a JPX that references the source JP2 files.
+- `hv_jpx_merged` keeps the Python merger loaded for repeated requests.
+  `hv_jpx_mergec -s arguments.txt` sends the same argument-file syntax accepted
+  by `hv_jpx_merge` to that daemon, waits for the merge to finish, and reports
+  failures through its exit status and standard error.
 - `hv_jpx_split -i movie.jpx` extracts numbered JP2 files in the current
   directory.
 
