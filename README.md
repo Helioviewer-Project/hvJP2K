@@ -11,7 +11,7 @@ The package installs these commands:
 - `hv_jp2_decode` decodes all or part of a JP2 image.
 - `hv_jp2_transcode` adds the codestream properties required by `esajpip`.
 - `hv_jpx_merge` builds embedded or linked JPX movies.
-- `hv_jpx_split` extracts the JP2 frames from a JPX movie.
+- `hv_jpx_split` extracts the JP2 frames from an embedded JPX movie.
 - `hv_jpx_merged` and `hv_jpx_mergec` provide a persistent merge service for
   applications such as `esajpip`.
 
@@ -123,8 +123,8 @@ shown in the daemon section below and run the merger directly:
 hv_jpx_merge -s merge.args
 ```
 
-To extract a movie, run the splitter from the directory that should receive the
-numbered files:
+To extract an embedded movie, run the splitter from the directory that should
+receive the numbered files:
 
 ```sh
 mkdir extracted

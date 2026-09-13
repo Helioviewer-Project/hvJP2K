@@ -1,5 +1,6 @@
 
 cpdef list hv_parse_superbox(fptr, Py_ssize_t offset, Py_ssize_t length)
+cpdef hv_copy_codestream(ifile, ofile, Py_ssize_t offset, Py_ssize_t length)
 
 cdef class hvJP2HeaderBox(object):
     cdef readonly str box_id

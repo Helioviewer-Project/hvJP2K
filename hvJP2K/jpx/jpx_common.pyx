@@ -6,13 +6,14 @@
 
 cimport cython
 
-from libc.stdint cimport uint32_t, uint64_t
+from libc.stdint cimport uint32_t
+from libc.string cimport memcpy
 from cpython.bytes cimport PyBytes_GET_SIZE, PyBytes_AS_STRING, PyBytes_FromStringAndSize
 cdef extern from 'arpa/inet.h':
     uint32_t ntohl(uint32_t)
 
 import warnings
-from struct import pack, unpack
+from struct import error as StructError, pack, unpack
 
 from glymur.jp2box import UnknownBox, _BOX_WITH_ID
 from glymur.codestream import Codestream
@@ -32,8 +33,8 @@ cdef object hv_parse_this_box(fptr, bytes box_id, Py_ssize_t start, Py_ssize_t n
 
     try:
         box = parser(fptr, start, num_bytes)
-    except ValueError as err:
-        msg = ('Encountered an unrecoverable ValueError while parsing a {0} '
+    except (ValueError, StructError) as err:
+        msg = ('Encountered an unrecoverable error while parsing a {0} '
                'box at byte offset {1}.  The original error message was "{2}"')
         msg = msg.format(box_id.decode('utf-8'), start, str(err))
         warnings.warn(msg, UserWarning)
@@ -44,7 +45,8 @@ cdef object hv_parse_this_box(fptr, bytes box_id, Py_ssize_t start, Py_ssize_t n
 
 cpdef list hv_parse_superbox(fptr, Py_ssize_t offset, Py_ssize_t length):
 
-    cdef Py_ssize_t box_length, num_bytes, cur_pos, start
+    cdef Py_ssize_t box_length, header_length, num_bytes, cur_pos, start
+    cdef uint32_t raw_box_length
     cdef bytes read_buffer, box_id
     cdef const char *c_read_buffer
 
@@ -74,7 +76,8 @@ cpdef list hv_parse_superbox(fptr, Py_ssize_t offset, Py_ssize_t length):
 
         # (box_length, box_id) = unpack('>I4s', read_buffer)
         c_read_buffer = PyBytes_AS_STRING(read_buffer)
-        box_length = ntohl((<uint32_t *> c_read_buffer)[0])
+        memcpy(&raw_box_length, c_read_buffer, sizeof(raw_box_length))
+        box_length = ntohl(raw_box_length)
         box_id = PyBytes_FromStringAndSize(c_read_buffer + 4, 4)
 
         if box_length == 0:
@@ -84,6 +87,9 @@ cpdef list hv_parse_superbox(fptr, Py_ssize_t offset, Py_ssize_t length):
         elif box_length == 1:
             # The length of the box is in the XL field, a 64-bit value.
             read_buffer = <bytes> fptr_read(8)
+            if PyBytes_GET_SIZE(read_buffer) < 8:
+                warnings.warn('Incomplete extended box length ignored.')
+                break
             num_bytes, = unpack('>Q', read_buffer)
         else:
             # The box_length value really is the length of the box!
@@ -120,6 +126,28 @@ cpdef list hv_parse_superbox(fptr, Py_ssize_t offset, Py_ssize_t length):
         fptr_seek(start)
 
     return superbox
+
+
+cpdef hv_copy_codestream(ifile, ofile, Py_ssize_t offset, Py_ssize_t length):
+    cdef Py_ssize_t chunk_length, remaining = length
+    cdef bytes chunk
+
+    if length < 0:
+        raise ValueError('negative JPEG 2000 codestream length')
+
+    ifile.seek(offset)
+    if length <= 0xFFFFFFFF - 8:
+        ofile.write(pack('>I4s', length + 8, b'jp2c'))
+    else:
+        ofile.write(pack('>I4sQ', 1, b'jp2c', length + 16))
+
+    while remaining:
+        chunk_length = min(remaining, 1024 * 1024)
+        chunk = <bytes> ifile.read(chunk_length)
+        if not chunk:
+            raise EOFError('unexpected end of JPEG 2000 codestream')
+        ofile.write(chunk)
+        remaining -= PyBytes_GET_SIZE(chunk)
 
 
 # singleton essentially
@@ -199,9 +227,7 @@ cdef class hvContiguousCodestreamBox(object):
         return self
 
     cpdef hv_copy(hvContiguousCodestreamBox self, ifile, ofile):
-        ifile.seek(self.offset)
-        ofile.write(pack('>I4s', self.length + 8, b'jp2c'))
-        ofile.write(ifile.read(self.length))
+        hv_copy_codestream(ifile, ofile, self.offset, self.length)
 
     cpdef object hv_parse(hvContiguousCodestreamBox self, fptr):
         fptr.seek(self.offset)

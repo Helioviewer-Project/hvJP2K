@@ -5,25 +5,46 @@ import argparse
 
 from hvJP2K.jp2.jp2_decode import jp2_decode
 
-parser = argparse.ArgumentParser(description='Decode JP2 files.')
-parser.add_argument('-i', metavar='jp2file', help='input JP2 filename', required=True)
-parser.add_argument('-o', metavar='file', help='output filename', required=True)
-parser.add_argument('-region', metavar='{<top>,<left>},{<height>,<width>}', help='region of interest')
-parser.add_argument('-reduce', metavar='<discard levels>', help='resolution levels to be discarded', type=int, nargs='?', default=0)
-parser.add_argument('-codestream_components', help='suppress multi-component/colour xforms', action='store_true')
-parser.add_argument('-xml', help='print to terminal the XML metadata', action='store_true')
-parser.add_argument('-v', '--verbose', help='verbose operation', action='store_true')
+parser = argparse.ArgumentParser(description="Decode JP2 files.")
+parser.add_argument("-i", metavar="jp2file", help="input JP2 filename", required=True)
+parser.add_argument("-o", metavar="file", help="output filename", required=True)
+parser.add_argument(
+    "-region", metavar="{<top>,<left>},{<height>,<width>}", help="region of interest"
+)
+parser.add_argument(
+    "-reduce",
+    metavar="<discard levels>",
+    help="resolution levels to be discarded",
+    type=int,
+    nargs="?",
+    default=0,
+)
+parser.add_argument(
+    "-codestream_components",
+    help="suppress multi-component/colour xforms",
+    action="store_true",
+)
+parser.add_argument(
+    "-xml", help="print to terminal the XML metadata", action="store_true"
+)
+parser.add_argument("-v", "--verbose", help="verbose operation", action="store_true")
 args = parser.parse_args()
 
 area = None
 if args.region is not None:
-    area = [float(n) for n in re.split(r'[{},]', args.region) if n]
+    area = [float(n) for n in re.split(r"[{},]", args.region) if n]
     if len(area) != 4:
-        area = None
-    else:
-        # to (top left, bottom right)
-        area[2] += area[0]
-        area[3] += area[1]
+        parser.error("-region requires {top,left},{height,width}")
+    # Convert from (top, left, size) to (top left, bottom right).
+    area[2] += area[0]
+    area[3] += area[1]
 
-jp2_decode(args.i, args.o, xml=args.xml, rlevel=args.reduce, area=area,
-           ignore_pclr_cmap_cdef=args.codestream_components, verbose=args.verbose)
+jp2_decode(
+    args.i,
+    args.o,
+    xml=args.xml,
+    rlevel=args.reduce,
+    area=area,
+    ignore_pclr_cmap_cdef=args.codestream_components,
+    verbose=args.verbose,
+)

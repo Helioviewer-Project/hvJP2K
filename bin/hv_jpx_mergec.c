@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,8 +12,7 @@ static const char *socket_path = "/tmp/hv_jpx_merged_socket";
 
 #define BUF_SIZE 4096
 
-static int write_all(int fd, const char *buf, size_t length)
-{
+static int write_all(int fd, const char *buf, size_t length) {
     while (length > 0) {
         ssize_t written = write(fd, buf, length);
 
@@ -31,8 +31,7 @@ static int write_all(int fd, const char *buf, size_t length)
     return 0;
 }
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
     struct sockaddr_un addr;
     char buf[BUF_SIZE];
     const char *argument_file = NULL;
@@ -40,6 +39,11 @@ int main(int argc, char **argv)
     int fd, input_fd = STDIN_FILENO;
     ssize_t count;
     int i;
+
+    if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+        perror("signal error");
+        return EXIT_FAILURE;
+    }
 
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {

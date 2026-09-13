@@ -4,10 +4,10 @@ import argparse
 
 from hvJP2K.jpx.jpx_merge_daemon import jpx_merge_daemon
 
-parser = argparse.ArgumentParser(
-    description='Run the persistent JPX merge service.')
-parser.add_argument('--socket', default='/tmp/hv_jpx_merged_socket',
-                    help='Unix socket path')
+parser = argparse.ArgumentParser(description="Run the persistent JPX merge service.")
+parser.add_argument(
+    "--socket", default="/tmp/hv_jpx_merged_socket", help="Unix socket path"
+)
 args = parser.parse_args()
 
 try:

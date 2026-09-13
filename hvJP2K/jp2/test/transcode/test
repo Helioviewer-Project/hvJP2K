@@ -1,26 +1,19 @@
-#! /bin/sh
+#!/bin/sh
 
-function file_size {
-    echo $(wc -c "$1" | awk '{ print $1 }')
-}
+set -eu
 
-function do_test {
-    cp -R orig tst
+test_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+work_dir=$(mktemp -d "${TMPDIR:-/tmp}/hvjp2k-transcode-test.XXXXXX")
+trap 'rm -rf "$work_dir"' EXIT
 
-    REF=trans/$1
-    SREF=$(file_size $REF)
+if [ -n "${HVJP2K_BIN:-}" ]; then
+    transcode="$HVJP2K_BIN/hv_jp2_transcode"
+else
+    transcode=hv_jp2_transcode
+fi
 
-    PRE=~/hvJP2K/bin
-    $PRE/hv_jp2_transcode -d tst -x
-
-    TST=tst/$1
-    STST=$(file_size $TST)
-
-    CMP=$(cmp -s "$TST" "$REF")
-    RES=fail
-    if [ $STST == $SREF ] && [ $? -eq 0 ]; then RES=pass; fi
-    echo $RES: $1
-    rm -fr tst
-}
-
-do_test 2015_12_21__00_10_34_34__SDO_AIA_AIA_171.jp2
+name=2015_12_21__00_10_34_34__SDO_AIA_AIA_171.jp2
+cp "$test_dir/orig/$name" "$work_dir/$name"
+"$transcode" -d "$work_dir" --xml-rewrite
+cmp "$work_dir/$name" "$test_dir/trans/$name"
+echo "pass: $name"

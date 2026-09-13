@@ -161,6 +161,8 @@ def jpx_merge(names_in, jpxname, links):
     num = len(names_in)
     if num == 0:
         raise ValueError('no JP2 input files')
+    if links and num > 0xFFFF:
+        raise ValueError('linked JPX supports at most 65535 input files')
 
     struct_pack = struct.pack
 
@@ -199,6 +201,10 @@ def jpx_merge(names_in, jpxname, links):
             jp2c = jp2_common.first_box(box, 'jp2c')
             if jp2h is None or jp2c is None:
                 raise ValueError('missing required JP2 box: {0}'.format(os.fsdecode(jp2name)))
+            if links and jp2c.length > 0xFFFFFFFF:
+                raise ValueError(
+                    'linked JPX cannot reference a codestream larger than '
+                    '4 GiB: {0}'.format(os.fsdecode(jp2name)))
 
             inputs.append((jp2name, jp2h.header, jp2h.hv_parse(ifile),
                            None if xml_ is None else xml_.xmlbuf,
@@ -232,9 +238,8 @@ def jpx_merge(names_in, jpxname, links):
                 dtbl_length += len(url_box)
             else:
                 with open(jp2name, 'rb') as ifile:
-                    ifile.seek(jp2c_offset)
-                    jpx_write(struct_pack('>I4s', jp2c_length + 8, b'jp2c'))
-                    jpx_write(ifile.read(jp2c_length))
+                    jpx_common_c.hv_copy_codestream(
+                        ifile, jpx, jp2c_offset, jp2c_length)
 
             if xmlbuf is not None:
                 association = struct_pack('>I4sI4sII',

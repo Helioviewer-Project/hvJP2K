@@ -13,14 +13,14 @@ class BuildScripts(build_scripts):
 
         compiler = new_compiler(force=self.force)
         customize_compiler(compiler)
-        build_ext = self.get_finalized_command('build_ext')
-        source = 'bin/hv_jpx_mergec.c'
+        build_ext = self.get_finalized_command("build_ext")
+        source = "bin/hv_jpx_mergec.c"
         objects = compiler.compile([source], output_dir=build_ext.build_temp)
-        compiler.link_executable(
-            objects, os.path.join(self.build_dir, 'hv_jpx_mergec'))
+        compiler.link_executable(objects, os.path.join(self.build_dir, "hv_jpx_mergec"))
 
     def get_source_files(self):
-        return super().get_source_files() + ['bin/hv_jpx_mergec.c']
+        return super().get_source_files() + ["bin/hv_jpx_mergec.c"]
+
 
 with open("README.md", encoding="utf-8") as readme:
     long_description = readme.read()

@@ -7,13 +7,23 @@ import shutil
 
 from hvJP2K.jp2.jp2_transcode import jp2_transcode
 
-parser = argparse.ArgumentParser(description='This script is used to transcode HV JP2 files.')
-parser.add_argument('-d', '--directory', metavar='base_dir', help='The directory to transcode', required=True)
-parser.add_argument('-x', '--xml-rewrite', help='Rewrite XML box', action='store_true')
+parser = argparse.ArgumentParser(
+    description="This script is used to transcode HV JP2 files."
+)
+parser.add_argument(
+    "-d",
+    "--directory",
+    metavar="base_dir",
+    help="The directory to transcode",
+    required=True,
+)
+parser.add_argument("-x", "--xml-rewrite", help="Rewrite XML box", action="store_true")
 args = parser.parse_args()
 
-for path in sorted(Path(args.directory).rglob('*.jp2')):
-    path = str(path)
-    trans = jp2_transcode(path, xml_rewrite=args.xml_rewrite)
-    shutil.copymode(path, trans)
-    os.replace(trans, path)
+for path in sorted(Path(args.directory).rglob("*.jp2")):
+    trans = Path(jp2_transcode(str(path), xml_rewrite=args.xml_rewrite))
+    try:
+        shutil.copymode(path, trans)
+        os.replace(trans, path)
+    finally:
+        trans.unlink(missing_ok=True)

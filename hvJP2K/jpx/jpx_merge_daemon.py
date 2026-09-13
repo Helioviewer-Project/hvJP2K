@@ -3,6 +3,7 @@ import os
 import shlex
 import socket
 import socketserver
+import stat
 import traceback
 
 from .jpx_merge import jpx_merge
@@ -14,9 +15,9 @@ class RequestParser(argparse.ArgumentParser):
 
 
 _request_parser = RequestParser(add_help=False)
-_request_parser.add_argument('-i', nargs='+', required=True)
-_request_parser.add_argument('-o', required=True)
-_request_parser.add_argument('-links', action='store_true')
+_request_parser.add_argument("-i", nargs="+", required=True)
+_request_parser.add_argument("-o", required=True)
+_request_parser.add_argument("-links", action="store_true")
 
 
 def parse_request(request):
@@ -28,7 +29,7 @@ def parse_request(request):
     args = _request_parser.parse_args(request_args)
 
     names = (os.fsencode(name) for name in args.i if name)
-    names_in = [name for name in b','.join(names).split(b',') if name]
+    names_in = [name for name in b",".join(names).split(b",") if name]
     return names_in, os.fsencode(args.o), args.links
 
 
@@ -42,27 +43,31 @@ class ThreadedUnixStreamHandler(socketserver.StreamRequestHandler):
             jpx_merge(names_in, jpx_out, links)
         except Exception as error:
             traceback.print_exc()
-            message = str(error).replace('\n', ' ')
-            self.wfile.write(('ERROR: {0}: {1}\n'.format(
-                type(error).__name__, message)).encode())
+            message = str(error).replace("\n", " ")
+            self.wfile.write(
+                ("ERROR: {0}: {1}\n".format(type(error).__name__, message)).encode()
+            )
         else:
-            self.wfile.write(b'OK\n')
+            self.wfile.write(b"OK\n")
 
 
-class ThreadedUnixStreamServer(socketserver.ThreadingMixIn,
-                               socketserver.UnixStreamServer):
+class ThreadedUnixStreamServer(
+    socketserver.ThreadingMixIn, socketserver.UnixStreamServer
+):
     request_queue_size = socket.SOMAXCONN
 
 
 def jpx_merge_daemon(address):
     if os.path.exists(address):
+        if not stat.S_ISSOCK(os.stat(address, follow_symlinks=False).st_mode):
+            raise RuntimeError("merge socket path is not a socket: " + address)
         probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             probe.connect(address)
         except ConnectionRefusedError:
             os.unlink(address)
         else:
-            raise RuntimeError('merge daemon is already running: ' + address)
+            raise RuntimeError("merge daemon is already running: " + address)
         finally:
             probe.close()
 

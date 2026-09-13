@@ -11,35 +11,43 @@ from lxml import isoschematron
 
 from hvJP2K.jp2.data import hv_schematron
 
-
 validate_xml_box = bv.BoxValidator.validate_xmlBox
 
 
 def validate_null_terminated_xml_box(self):
-    self.boxContents = self.boxContents.rstrip(b'\x00')
+    self.boxContents = self.boxContents.rstrip(b"\x00")
     return validate_xml_box(self)
 
-parser = argparse.ArgumentParser(description='Verify JP2 files for Helioviewer conformance.')
-parser.add_argument('-i', metavar='jp2file', help='input JP2 filename', required=True)
-parser.add_argument('-schema', metavar='schfile', help='alternate Schematron filename')
-parser.add_argument('-n', '--nullxml', help='allow null-terminated XML box', action='store_true')
-parser.add_argument('-v', '--verbose', help='verbose operation', action='store_true')
+
+parser = argparse.ArgumentParser(
+    description="Verify JP2 files for Helioviewer conformance."
+)
+parser.add_argument("-i", metavar="jp2file", help="input JP2 filename", required=True)
+parser.add_argument("-schema", metavar="schfile", help="alternate Schematron filename")
+parser.add_argument(
+    "-n", "--nullxml", help="allow null-terminated XML box", action="store_true"
+)
+parser.add_argument("-v", "--verbose", help="verbose operation", action="store_true")
 args = parser.parse_args()
 
 if args.nullxml:
     bv.BoxValidator.validate_xmlBox = validate_null_terminated_xml_box
 
-xml_tree = etree.fromstring(ElementTree.tostring(jpylyzer.checkOneFile(
-    args.i,
-    verboseFlag=args.verbose,
-    nullxmlFlag=True,
-)))
+xml_tree = etree.fromstring(
+    ElementTree.tostring(
+        jpylyzer.checkOneFile(
+            args.i,
+            verboseFlag=args.verbose,
+            nullxmlFlag=args.nullxml,
+        )
+    )
+)
 if args.verbose:
-    print(etree.tostring(xml_tree, encoding='unicode', pretty_print=True))
+    print(etree.tostring(xml_tree, encoding="unicode", pretty_print=True))
 
 schema_file = args.schema if args.schema else hv_schematron()
 schema = isoschematron.Schematron(etree.parse(schema_file))
 if not schema.validate(xml_tree):
-    print(args.i + ': fails validation', file=sys.stderr)
+    print(args.i + ": fails validation", file=sys.stderr)
     print(schema.error_log, file=sys.stderr)
     sys.exit(1)
