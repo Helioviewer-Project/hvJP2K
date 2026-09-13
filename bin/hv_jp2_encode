@@ -1,12 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-import os
 import argparse
+import os
 
 import numpy as np
 from lxml import etree as et
 from astropy.io import fits
-from glymur import Jp2k
 
 from hvJP2K.jp2.jp2_write import hv_write_openjp2
 
@@ -21,7 +20,7 @@ def header2xml(header):
         if isinstance(value, str):
             value = value.strip("'")
         elif isinstance(value, bool):
-            value = {True:'T', False:'F'}[value]
+            value = {True: 'T', False: 'F'}[value]
         else:
             value = repr(value)
             if value.endswith('.0'):
@@ -45,7 +44,9 @@ def fits2xml(header):
     return meta
 
 def xfer_sgamma(img):
-    img[:,:] = np.where(img > 0.0031308, 1.055 * np.power(img, .416666666666667) - 0.055, 12.92 * img)
+    high = img > 0.0031308
+    img[~high] *= 12.92
+    img[high] = 1.055 * np.power(img[high], .416666666666667) - 0.055
 
 def xfer_gamma(img):
     np.power(img, .416666666666667, out=img)
@@ -57,7 +58,7 @@ def xfer_log(img):
 def xfer_linear(img):
     pass
 
-xfer = {'sgamma':xfer_sgamma, 'gamma':xfer_gamma, 'log':xfer_log, 'linear':xfer_linear}
+xfer = {'sgamma': xfer_sgamma, 'gamma': xfer_gamma, 'log': xfer_log, 'linear': xfer_linear}
 bpps = (8, 12, 16)
 
 parser = argparse.ArgumentParser(description='Encode FITS to HV JP2.')
@@ -96,7 +97,8 @@ def data_process(hdu):
     else:
         np.clip(img, p[0], p[1], out=img)
         r = 1. / (p[1] - p[0])
-        img = (img - p[0]) * r
+        img -= p[0]
+        img *= r
 
     xfer[args.function](img)
 
@@ -107,7 +109,9 @@ def data_process(hdu):
     #hdu.writeto('bla.fits', output_verify='silentfix' if args.verbose==False else 'fix', checksum=True, clobber=True)
 
     name = os.path.splitext(args.i)[0] + '.jp2'
-    hv_write_openjp2(name, img, args.bpp, xml, prog='RPCL', cratios=cratios, numres=6, irreversible=True)
+    hv_write_openjp2(name, img, args.bpp, xml, prog='RPCL', cratios=cratios,
+                     numres=6, psizes=[(128, 128)] * 6, plt=True,
+                     irreversible=True)
 
     #jp2 = Jp2k('bla.jp2', mode='wb')
     #jp2.write(img, verbose=args.verbose, prog='RPCL', cratios=cratios, numres=6)

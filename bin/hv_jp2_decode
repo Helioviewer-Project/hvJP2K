@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import re
 import argparse
@@ -17,7 +17,7 @@ args = parser.parse_args()
 
 area = None
 if args.region is not None:
-    area = [float(n) for n in re.split('\{|,|\}', args.region) if n != '']
+    area = [float(n) for n in re.split(r'[{},]', args.region) if n]
     if len(area) != 4:
         area = None
     else:

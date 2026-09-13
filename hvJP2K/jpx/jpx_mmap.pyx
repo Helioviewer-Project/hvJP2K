@@ -64,7 +64,7 @@ cdef inline int mmap_open(const char *name, mmap_t *mm) nogil:
 
     return 0
 
-cdef inline void mmap_close(mmap_t *mm) nogil:
+cdef inline void mmap_close(mmap_t *mm) noexcept nogil:
     if mm.is_open:
         if mm.buf != NULL:
             munmap(mm.buf, mm.size) # != 0
@@ -108,10 +108,13 @@ cdef class hvMap(object):
         if self.mm.is_open == 0:
             return None
 
+        if self.mm.off >= self.mm.size:
+            return b''
+
         cdef Py_ssize_t new_off = self.mm.off + num
-        if new_off > self.mm.size - 1:
-            new_off = self.mm.size - 1
-            num = new_off - self.mm.off + 1
+        if new_off > self.mm.size:
+            new_off = self.mm.size
+            num = new_off - self.mm.off
 
         cdef bytes buf = <bytes> PyBytes_FromStringAndSize(self.mm.buf + self.mm.off, num)
         self.mm.off = new_off

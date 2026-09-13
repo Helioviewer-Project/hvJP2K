@@ -1,38 +1,31 @@
-#! /bin/sh
+#!/bin/sh
 
-function file_size {
-    echo $(wc -c "$1" | awk '{ print $1 }')
-}
+set -eu
 
-function do_test {
-    mkdir -p $1-test
-    cd $1-test
+test_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+work_root=$(mktemp -d "${TMPDIR:-/tmp}/hvjp2k-jpx-test.XXXXXX")
+trap 'rm -rf "$work_root"' EXIT
 
-    PRE=~/hvJP2K/bin
+if [ -n "${HVJP2K_BIN:-}" ]; then
+    merge="$HVJP2K_BIN/hv_jpx_merge"
+    split="$HVJP2K_BIN/hv_jpx_split"
+else
+    merge=hv_jpx_merge
+    split=hv_jpx_split
+fi
 
-    IN=$(echo ../"$1"-ref/*.jp2 | tr ' ' ,)
-    $PRE/hv_jpx_split -i ../$1.jpx
-    $PRE/hv_jpx_merge -i *.jp2 -o $1-hv.jpx
-    $PRE/hv_jpx_merge -i $IN -o $1-hv-links.jpx -links
+for name in aia swap hetero; do
+    cp -R "$test_dir/$name-ref" "$work_root/$name-ref"
+    cp "$test_dir/$name.jpx" "$work_root/$name.jpx"
+    mkdir "$work_root/$name-test"
+    cd "$work_root/$name-test"
 
-    for i in *; do
-        TST=$i
-        STST=$(file_size $TST)
+    "$split" -i "../$name.jpx"
+    "$merge" -i ./*.jp2 -o "$name-hv.jpx"
+    "$merge" -i ../"$name-ref"/*.jp2 -o "$name-hv-links.jpx" -links
 
-        REF=../$1-ref/$i
-        SREF=$(file_size $REF)
-
-        cmp -s "$TST" "$REF"
-        local status=$?
-        RES=fail
-        if [ $STST == $SREF ] && [ $status -eq 0 ]; then RES=pass; fi
-        echo $RES: $i
+    for output in ./*; do
+        cmp "$output" "../$name-ref/$(basename "$output")"
     done
-
-    cd ..
-    rm -fr $1-test
-}
-
-do_test aia
-do_test swap
-do_test hetero
+    echo "pass: $name"
+done

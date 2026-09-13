@@ -1,22 +1,16 @@
 
+import ctypes
+from contextlib import ExitStack
 from io import BytesIO
 import os
-import sys
-import ctypes
 import struct
 import warnings
-
-# Exitstack not found in contextlib in 2.7
-# pylint: disable=E0611
-if sys.hexversion >= 0x03030000:
-    from contextlib import ExitStack
-else:
-    from contextlib2 import ExitStack
 
 import numpy as np
 from glymur import jp2box
 from glymur.lib import openjp2 as opj2
 from glymur.core import PROGRESSION_ORDER, GREYSCALE
+from lxml import etree
 
 
 def hv_write_openjp2(name, img, bpp, xml, **kwargs):
@@ -24,13 +18,19 @@ def hv_write_openjp2(name, img, bpp, xml, **kwargs):
     head = BytesIO()
 
     nrows, ncols = img.shape
+    if hasattr(xml, 'getroot'):
+        xml_tree = xml
+    elif hasattr(xml, 'getroottree'):
+        xml_tree = xml.getroottree()
+    else:
+        xml_tree = etree.ElementTree(xml)
     boxes = (jp2box.JPEG2000SignatureBox(),
              jp2box.FileTypeBox(),
              jp2box.JP2HeaderBox(
                 box=(jp2box.ImageHeaderBox(height=nrows, width=ncols,
                                            bits_per_component=bpp),
                      jp2box.ColourSpecificationBox(colorspace=GREYSCALE))),
-             jp2box.XMLBox(xml))
+             jp2box.XMLBox(xml_tree))
 
     for box in boxes:
         box.write(head)
@@ -55,7 +55,7 @@ def __populate_comptparms(img_array, comp_prec, cparams):
     comptparms[0].x0 = cparams.image_offset_x0
     comptparms[0].y0 = cparams.image_offset_y0
     comptparms[0].prec = comp_prec
-    comptparms[0].bpp = 16
+    comptparms[0].bpp = comp_prec
     comptparms[0].sgnd = 0
 
     return comptparms
@@ -74,16 +74,13 @@ def __populate_image_struct(image, imgdata, comp_prec, cparams):
 
     # Stage the image data to the openjpeg data structure.
     image.contents.comps[0].prec = comp_prec
-    image.contents.comps[0].bpp = 16
+    image.contents.comps[0].bpp = comp_prec
     image.contents.comps[0].sgnd = 0
 
     layer = np.ascontiguousarray(imgdata, dtype=np.int32)
     dest = image.contents.comps[0].data
     src = layer.ctypes.data
     ctypes.memmove(dest, src, layer.nbytes)
-
-    return image
-
 
 def __populate_cparams(**kwargs):
 
@@ -158,6 +155,8 @@ def __write_openjp2(img_array, filename, offset, comp_prec=8, verbose=False, **k
         opj2.set_error_handler(codec, _ERROR_CALLBACK)
 
         opj2.setup_encoder(codec, cparams, image)
+        if kwargs.get('plt', False):
+            opj2.encoder_set_extra_options(codec, plt=True)
 
         strm = opj2.stream_create_default_file_stream(filename, False)
         stack.callback(opj2.stream_destroy, strm)
@@ -168,9 +167,6 @@ def __write_openjp2(img_array, filename, offset, comp_prec=8, verbose=False, **k
         opj2.encode(codec, strm)
         opj2.end_compress(codec, strm)
 
-
-from glymur.lib.config import glymur_config
-OPENJP2, OPENJPEG = glymur_config()
 
 class OPJStreamPrivate(ctypes.Structure):
     _fields_ = [

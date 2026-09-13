@@ -1,11 +1,6 @@
 
 import os
-import sys
-
-if sys.hexversion >= 0x03000000:
-    import socketserver
-else:
-    import SocketServer as socketserver
+import socketserver
 
 from .jpx_merge import jpx_merge
 

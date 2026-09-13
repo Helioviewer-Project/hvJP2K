@@ -1,23 +1,19 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import argparse
 import os
+from pathlib import Path
 import shutil
 
 from hvJP2K.jp2.jp2_transcode import jp2_transcode
-
-def get_recursive_file_list(rootdir):
-    """Get all files in a given directory recursively."""
-    fileList = []
-    for r,d,f in os.walk(rootdir):
-        for fs in f:
-            fileList.append(os.path.join(r, fs))
-    return fileList
 
 parser = argparse.ArgumentParser(description='This script is used to transcode HV JP2 files.')
 parser.add_argument('-d', '--directory', metavar='base_dir', help='The directory to transcode', required=True)
 parser.add_argument('-x', '--xml-rewrite', help='Rewrite XML box', action='store_true')
 args = parser.parse_args()
 
-for path in get_recursive_file_list(args.directory):
-    shutil.move(jp2_transcode(path, xml_rewrite=args.xml_rewrite), path)
+for path in sorted(Path(args.directory).rglob('*.jp2')):
+    path = str(path)
+    trans = jp2_transcode(path, xml_rewrite=args.xml_rewrite)
+    shutil.copymode(path, trans)
+    os.replace(trans, path)

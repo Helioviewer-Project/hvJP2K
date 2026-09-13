@@ -1,5 +1,4 @@
 
-from io import BytesIO
 from os import stat
 import sys
 import warnings
@@ -86,18 +85,15 @@ def jpx_split(jpxname):
         jp2h = jp2box.JP2HeaderBox()
 
         for i in range(num):
-            jp2 = BytesIO()
-            sign.write(jp2)
-            ftyp.write(jp2)
-
-            jp2h.box = jp2h_boxes(jpch[i].box, jplh[i].box)
-            jp2h.write(jp2)
-
-            if xmls[i] is not None:
-                jp2.write(xmls[i])
-
-            jp2c[i].hv_copy(ifile, jp2)
-
             jp2name = '{0:03d}'.format(i) + '.jp2'
             with open(jp2name, 'wb') as ofile:
-                ofile.write(jp2.getvalue())
+                sign.write(ofile)
+                ftyp.write(ofile)
+
+                jp2h.box = jp2h_boxes(jpch[i].box, jplh[i].box)
+                jp2h.write(ofile)
+
+                if xmls[i] is not None:
+                    ofile.write(xmls[i])
+
+                jp2c[i].hv_copy(ifile, ofile)

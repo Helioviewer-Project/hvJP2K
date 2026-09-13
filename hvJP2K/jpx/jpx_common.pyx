@@ -11,7 +11,6 @@ from cpython.bytes cimport PyBytes_GET_SIZE, PyBytes_AS_STRING, PyBytes_FromStri
 cdef extern from 'arpa/inet.h':
     uint32_t ntohl(uint32_t)
 
-import os
 import warnings
 from struct import pack, unpack
 
@@ -81,10 +80,7 @@ cpdef list hv_parse_superbox(fptr, Py_ssize_t offset, Py_ssize_t length):
         if box_length == 0:
             # The length of the box is presumed to last until the end of
             # the file.  Compute the effective length of the box.
-            # num_bytes = os.path.getsize(fptr.name) - fptr.tell() + 8
-
-            # !!! does not work if not top level box, unlikely to occur
-            num_bytes = length - start # length - (start + 8) + 8
+            num_bytes = offset + length - start
         elif box_length == 1:
             # The length of the box is in the XL field, a 64-bit value.
             read_buffer = <bytes> fptr_read(8)
@@ -92,6 +88,12 @@ cpdef list hv_parse_superbox(fptr, Py_ssize_t offset, Py_ssize_t length):
         else:
             # The box_length value really is the length of the box!
             num_bytes = box_length
+
+        header_length = 16 if box_length == 1 else 8
+        if num_bytes < header_length or start + num_bytes > offset + length:
+            msg = '{0} box has incorrect box length ({1})'
+            warnings.warn(msg.format(box_id, num_bytes))
+            break
 
         box = hv_parse_this_box(fptr, box_id, start, num_bytes)
         superbox.append(box)
@@ -104,13 +106,7 @@ cpdef list hv_parse_superbox(fptr, Py_ssize_t offset, Py_ssize_t length):
         start += num_bytes
         cur_pos = fptr_tell()
 
-        if num_bytes > length:
-            # Length of the current box goes past the end of the
-            # enclosing superbox.
-            msg = '{0} box has incorrect box length ({1})'
-            msg = msg.format(box_id, num_bytes)
-            warnings.warn(msg)
-        elif cur_pos == start:
+        if cur_pos == start:
             # At the start of the next box, jump to it.
             continue
         elif cur_pos > start:

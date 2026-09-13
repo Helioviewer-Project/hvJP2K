@@ -19,7 +19,7 @@ def jp2_decode(name_in, name_out, xml=False, rlevel=0, area=None,
 
     xml_ = first_box(jp2.box, 'xml ')
     if xml and xml_ is not None:
-        print(et.tostring(xml_.xml))
+        print(et.tostring(xml_.xml, encoding='unicode'))
 
     code = jp2.get_codestream()
     xsiz = code.segment[1].xsiz
@@ -34,9 +34,13 @@ def jp2_decode(name_in, name_out, xml=False, rlevel=0, area=None,
         area[3] *= xsiz
         area = [int(n + .5) for n in area]
 
-    rlevel = np.clip(rlevel, 0, code.segment[2].num_res)
+    rlevel = int(np.clip(rlevel, 0, code.segment[2].num_res))
 
-    # exception for zero size image
-    data = jp2.read(verbose=verbose, rlevel=rlevel, area=area,
-                    ignore_pclr_cmap_cdef=ignore_pclr_cmap_cdef)
+    jp2.verbose = verbose
+    jp2.ignore_pclr_cmap_cdef = ignore_pclr_cmap_cdef
+    step = 1 << rlevel
+    if area is None:
+        data = jp2[::step, ::step]
+    else:
+        data = jp2[area[0]:area[2]:step, area[1]:area[3]:step]
     Image.fromarray(data).save(name_out)

@@ -4,7 +4,6 @@
 # cython: boundscheck=False
 # cython: wraparound=False
 
-import os
 import warnings
 from struct import pack, unpack
 
@@ -64,10 +63,7 @@ def hv_parse_superbox(fptr, offset, length):
         if box_length == 0:
             # The length of the box is presumed to last until the end of
             # the file.  Compute the effective length of the box.
-            # num_bytes = os.path.getsize(fptr.name) - fptr.tell() + 8
-
-            # !!! does not work if not top level box, unlikely to occur
-            num_bytes = length - start # length - (start + 8) + 8
+            num_bytes = offset + length - start
         elif box_length == 1:
             # The length of the box is in the XL field, a 64-bit value.
             read_buffer = fptr_read(8)
@@ -75,6 +71,12 @@ def hv_parse_superbox(fptr, offset, length):
         else:
             # The box_length value really is the length of the box!
             num_bytes = box_length
+
+        header_length = 16 if box_length == 1 else 8
+        if num_bytes < header_length or start + num_bytes > offset + length:
+            msg = '{0} box has incorrect box length ({1})'
+            warnings.warn(msg.format(box_id, num_bytes))
+            break
 
         box = hv_parse_this_box(fptr, box_id, start, num_bytes)
         superbox.append(box)
@@ -87,13 +89,7 @@ def hv_parse_superbox(fptr, offset, length):
         start += num_bytes
         cur_pos = fptr_tell()
 
-        if num_bytes > length:
-            # Length of the current box goes past the end of the
-            # enclosing superbox.
-            msg = '{0} box has incorrect box length ({1})'
-            msg = msg.format(box_id, num_bytes)
-            warnings.warn(msg)
-        elif cur_pos == start:
+        if cur_pos == start:
             # At the start of the next box, jump to it.
             continue
         elif cur_pos > start:

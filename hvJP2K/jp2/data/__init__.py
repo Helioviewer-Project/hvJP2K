@@ -1,5 +1,5 @@
 
-import pkg_resources
+from importlib.resources import files
 
 def hv_schematron():
-    return pkg_resources.resource_filename(__name__, 'hv.sch')
+    return str(files(__name__).joinpath('hv.sch'))

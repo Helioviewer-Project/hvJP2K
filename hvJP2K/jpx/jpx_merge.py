@@ -5,8 +5,8 @@
 # cython: wraparound=False
 
 import cython
+import os
 import struct
-import sys
 
 from glymur import jp2box
 
@@ -55,6 +55,8 @@ def write_jpch_jplh(jp2h, jpx):
 def jpx_merge(names_in, jpxname, links):
 
     num = len(names_in)
+    if num == 0:
+        raise ValueError('no JP2 input files')
 
     struct_pack = struct.pack
 
@@ -74,8 +76,10 @@ def jpx_merge(names_in, jpxname, links):
 
     # asoc stream
     asoc = []
+    asoc_length = 0
     # dtbl stream
     dtbl = []
+    dtbl_length = 0
 
     head0 = cython.declare(cython.bytes)
     head0 = None
@@ -89,14 +93,18 @@ def jpx_merge(names_in, jpxname, links):
 
         try:
             if ifile.open(jp2name):
-                continue
+                jpx.close()
+                os.remove(jpxname)
+                raise OSError('cannot open JP2 file: {0}'.format(os.fsdecode(jp2name)))
 
             box = cython.declare(cython.list)
             box = jpx_common.hv_parse_superbox(ifile, 0, ifile.size())
 
             # failed JP2 signature or file type verification
             if not box or box[0] is None or box[1] is None:
-                continue
+                jpx.close()
+                os.remove(jpxname)
+                raise ValueError('invalid JP2 file: {0}'.format(os.fsdecode(jp2name)))
 
             jp2h = cython.declare(jpx_common.hvJP2HeaderBox)
             jp2h = jp2_common.first_box(box, 'jp2h')
@@ -106,15 +114,21 @@ def jpx_merge(names_in, jpxname, links):
 
             jp2c = cython.declare(jpx_common.hvContiguousCodestreamBox)
             jp2c = jp2_common.first_box(box, 'jp2c')
+            if jp2h is None or jp2c is None:
+                jpx.close()
+                os.remove(jpxname)
+                raise ValueError('missing required JP2 box: {0}'.format(os.fsdecode(jp2name)))
 
             # asoc
             if xml_ is not None:
-                asoc.append(struct_pack('>I4sI4sII',
+                association = struct_pack('>I4sI4sII',
                                     # asoc 8 + 16
                                     24 + xml_.length, b'asoc',
                                     # nlst 8 + 4 + 4
-                                    16, b'nlst', 0x01000000+i, 0x02000000+i))
+                                    16, b'nlst', 0x01000000+i, 0x02000000+i)
+                asoc.append(association)
                 asoc.append(xml_.xmlbuf)
+                asoc_length += len(association) + len(xml_.xmlbuf)
 
             # identical JP2 header, typical
             if head0 == jp2h.header:
@@ -125,7 +139,7 @@ def jpx_merge(names_in, jpxname, links):
 
                 # first is reference
                 if head0 is None:
-                    head0 = jp2h.header[:]
+                    head0 = jp2h.header
                     # write jp2h
                     jpx_write(head0 + empty_jpch_jplh)
                 # different size/colour spec
@@ -140,7 +154,9 @@ def jpx_merge(names_in, jpxname, links):
                 url_ = cython.declare(cython.bytes)
                 url_ = b'file://' + jp2name + b'\0'
                 # 8 + 1 + 1 + 1 + 1
-                dtbl.append(struct_pack('>I4sI', 12 + len(url_), b'url ', 0) + url_)
+                url_box = struct_pack('>I4sI', 12 + len(url_), b'url ', 0) + url_
+                dtbl.append(url_box)
+                dtbl_length += len(url_box)
             else:
                 # copy jp2c
                 jp2c.hv_copy(ifile, jpx)
@@ -148,14 +164,14 @@ def jpx_merge(names_in, jpxname, links):
             ifile.close()
 
     # 8 + asoc size
-    asoc_full = b''.join(asoc)
-    jpx_write(struct_pack('>I4s', 8 + len(asoc_full), b'asoc'))
-    jpx_write(asoc_full)
+    jpx_write(struct_pack('>I4s', 8 + asoc_length, b'asoc'))
+    for part in asoc:
+        jpx_write(part)
 
     if links:
         # 8 + 2 + dtbl size
-        dtbl_full = b''.join(dtbl)
-        jpx_write(struct_pack('>I4sH', 10 + len(dtbl_full), b'dtbl', len(dtbl)))
-        jpx_write(dtbl_full)
+        jpx_write(struct_pack('>I4sH', 10 + dtbl_length, b'dtbl', len(dtbl)))
+        for part in dtbl:
+            jpx_write(part)
 
     jpx.close()
