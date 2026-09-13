@@ -5,6 +5,8 @@
 # cython: wraparound=False
 
 import cython
+from hvJP2K.jpx cimport jpx_common as jpx_common_c
+
 from io import BytesIO
 import os
 import struct
@@ -13,7 +15,7 @@ from pathlib import Path
 from glymur import jp2box
 
 from ..jp2 import jp2_common
-from . import jpx_common, jpx_mmap
+from . import jpx_common
 
 # override glymur box parsing
 jp2box._BOX_WITH_ID[b'jP  '] = jpx_common.hvJPEG2000SignatureBox()
@@ -54,11 +56,11 @@ def reader_requirements(headers, metadata, links):
 
     for header in headers:
         has_palette |= jp2_common.first_box(header, 'pclr') is not None
-        cdef = jp2_common.first_box(header, 'cdef')
-        if cdef is not None:
-            if 1 in cdef.channel_type:
+        channel_definition = jp2_common.first_box(header, 'cdef')
+        if channel_definition is not None:
+            if 1 in channel_definition.channel_type:
                 opacity_features.add(9)
-            if 2 in cdef.channel_type:
+            if 2 in channel_definition.channel_type:
                 opacity_features.add(10)
         colr.append(tuple((box.method, box.colorspace,
                            box.icc_profile) for box in header
@@ -117,14 +119,14 @@ def write_jpch_jplh(jp2h, defaults, jpx):
     colr = [jpx_colr(box) for box in jp2h if box.box_id == 'colr']
     pclr = jp2_common.first_box(jp2h, 'pclr')
     cmap = jp2_common.first_box(jp2h, 'cmap')
-    cdef = jp2_common.first_box(jp2h, 'cdef')
+    channel_definition = jp2_common.first_box(jp2h, 'cdef')
     res = jp2_common.first_box(jp2h, 'res ')
 
     default_bpcc = jp2_common.first_box(defaults, 'bpcc')
     default_colr = [jpx_colr(box) for box in defaults if box.box_id == 'colr']
     default_pclr = jp2_common.first_box(defaults, 'pclr')
     default_cmap = jp2_common.first_box(defaults, 'cmap')
-    default_cdef = jp2_common.first_box(defaults, 'cdef')
+    default_channel_definition = jp2_common.first_box(defaults, 'cdef')
     default_res = jp2_common.first_box(defaults, 'res ')
 
     if pclr is None and default_pclr is not None:
@@ -145,8 +147,9 @@ def write_jpch_jplh(jp2h, defaults, jpx):
     boxes = []
     if [box_bytes(box) for box in colr] != [box_bytes(box) for box in default_colr]:
         boxes.append(jp2box.ColourGroupBox(box=colr))
-    if box_bytes(cdef) != box_bytes(default_cdef) and cdef is not None:
-        boxes.append(cdef)
+    if (box_bytes(channel_definition) != box_bytes(default_channel_definition)
+            and channel_definition is not None):
+        boxes.append(channel_definition)
     if box_bytes(res) != box_bytes(default_res) and res is not None:
         boxes.append(res)
     jp2box.CompositingLayerHeaderBox(box=boxes).write(jpx)
@@ -174,31 +177,25 @@ def jpx_merge(names_in, jpxname, links):
     dtbl = []
     dtbl_length = 0
 
-    ifile = cython.declare(jpx_mmap.hvMap)
-    ifile = jpx_mmap.hvMap()
-
     for i in range(num):
         jp2name = cython.declare(cython.bytes)
         jp2name = names_in[i]
 
-        try:
-            if ifile.open(jp2name):
-                raise OSError('cannot open JP2 file: {0}'.format(os.fsdecode(jp2name)))
-
+        with open(jp2name, 'rb') as ifile:
             box = cython.declare(cython.list)
-            box = jpx_common.hv_parse_superbox(ifile, 0, ifile.size())
+            box = jpx_common.hv_parse_superbox(ifile, 0, os.fstat(ifile.fileno()).st_size)
 
             # failed JP2 signature or file type verification
             if not box or box[0] is None or box[1] is None:
                 raise ValueError('invalid JP2 file: {0}'.format(os.fsdecode(jp2name)))
 
-            jp2h = cython.declare(jpx_common.hvJP2HeaderBox)
+            jp2h = cython.declare(jpx_common_c.hvJP2HeaderBox)
             jp2h = jp2_common.first_box(box, 'jp2h')
 
-            xml_ = cython.declare(jpx_common.hvXMLBox)
+            xml_ = cython.declare(jpx_common_c.hvXMLBox)
             xml_ = jp2_common.first_box(box, 'xml ')
 
-            jp2c = cython.declare(jpx_common.hvContiguousCodestreamBox)
+            jp2c = cython.declare(jpx_common_c.hvContiguousCodestreamBox)
             jp2c = jp2_common.first_box(box, 'jp2c')
             if jp2h is None or jp2c is None:
                 raise ValueError('missing required JP2 box: {0}'.format(os.fsdecode(jp2name)))
@@ -206,8 +203,6 @@ def jpx_merge(names_in, jpxname, links):
             inputs.append((jp2name, jp2h.header, jp2h.hv_parse(ifile),
                            None if xml_ is None else xml_.xmlbuf,
                            jp2c.offset, jp2c.length))
-        finally:
-            ifile.close()
 
     compatibility = ('jpx ',) if links else ('jpx ', 'jp2 ', 'jpxb')
     with open(jpxname, 'wb') as jpx:
@@ -236,14 +231,10 @@ def jpx_merge(names_in, jpxname, links):
                 dtbl.append(url_box)
                 dtbl_length += len(url_box)
             else:
-                try:
-                    if ifile.open(jp2name):
-                        raise OSError('cannot reopen JP2 file: {0}'.format(os.fsdecode(jp2name)))
+                with open(jp2name, 'rb') as ifile:
                     ifile.seek(jp2c_offset)
                     jpx_write(struct_pack('>I4s', jp2c_length + 8, b'jp2c'))
                     jpx_write(ifile.read(jp2c_length))
-                finally:
-                    ifile.close()
 
             if xmlbuf is not None:
                 association = struct_pack('>I4sI4sII',

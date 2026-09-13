@@ -1,0 +1,2 @@
+include hvJP2K/jpx/*.pxd
+include hvJP2K/jpx/*.pyx

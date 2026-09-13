@@ -17,10 +17,8 @@ setup(
     python_requires=">=3.11",
     ext_modules=cythonize(
         [
-            "hvJP2K/jp2/jp2_common.pyx",
             "hvJP2K/jpx/jpx_common.pyx",
-            "hvJP2K/jpx/jpx_mmap.pyx",
-            "hvJP2K/jpx/jpx_merge.py",
+            "hvJP2K/jpx/jpx_merge.pyx",
         ],
         build_dir="build/cython",
         language_level=3,
