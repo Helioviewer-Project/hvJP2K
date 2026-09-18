@@ -49,6 +49,7 @@ def box_bytes(box):
 
 @cython.infer_types(False)
 def reader_requirements(headers, rsiz, links):
+    features = {1}
     opacity_features = set()
 
     for header in headers:
@@ -59,34 +60,24 @@ def reader_requirements(headers, rsiz, links):
             if 2 in channel_definition.channel_type:
                 opacity_features.add(10)
 
-    features = [1]
     if 2 in rsiz:
-        features.append(4)
+        features.add(4)
     if any(value not in (1, 2) for value in rsiz):
-        features.append(5)
+        features.add(5)
     if len(headers) > 1:
-        features.append(2)
-    features.extend(opacity_features)
+        features.add(2)
+    features.update(opacity_features)
     if links:
-        features.append(15)
+        features.add(15)
 
-    features = sorted(set(features))
-    display_features = set(features)
-    for mask_length in (1, 2, 4, 8):
-        if len(features) <= mask_length * 8:
-            break
-    else:
-        raise ValueError('too many JPX reader requirements')
+    features = sorted(features)
+    mask_length = (len(features) + 7) // 8
 
     masks = [(1 << (mask_length * 8 - i - 1)).to_bytes(mask_length, 'big')
              for i in range(len(features))]
-    fully_understand = ((1 << len(features)) - 1) << (mask_length * 8 - len(features))
-    fully_understand = fully_understand.to_bytes(mask_length, 'big')
-    decode_completely = sum(int.from_bytes(mask, 'big')
-                            for feature, mask in zip(features, masks)
-                            if feature in display_features)
-    decode_completely = decode_completely.to_bytes(mask_length, 'big')
-    parts = [bytes((mask_length,)), fully_understand, decode_completely,
+    required = ((1 << len(features)) - 1) << (mask_length * 8 - len(features))
+    required = required.to_bytes(mask_length, 'big')
+    parts = [bytes((mask_length,)), required, required,
              struct.pack('>H', len(features))]
     for feature, mask in zip(features, masks):
         parts.extend((struct.pack('>H', feature), mask))

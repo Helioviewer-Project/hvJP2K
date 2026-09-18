@@ -15,6 +15,9 @@ else
 fi
 python=${HVJP2K_PYTHON:-python3}
 
+"$python" "$test_dir/reader_requirements.py"
+echo "pass: reader requirements"
+
 for name in aia swap hetero; do
     mkdir "$work_root/$name-test"
     cd "$work_root/$name-test"
