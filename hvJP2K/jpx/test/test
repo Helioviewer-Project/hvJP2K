@@ -42,3 +42,13 @@ cd "$work_root"
 "$merge" -i "linked input/a #1.jp2" -o escaped-link.jpx -links
 "$python" "$test_dir/validate.py" linked escaped-link.jpx "linked input/a #1.jp2"
 echo "pass: escaped link"
+
+mkdir "$work_root/invalid"
+dd if="$test_dir/aia-ref/000.jp2" of="$work_root/invalid/no-signature.jp2" \
+    bs=1 skip=12 2>/dev/null
+if "$merge" -i "$work_root/invalid/no-signature.jp2" \
+    -o "$work_root/invalid/no-signature.jpx" 2>/dev/null; then
+    echo "fail: accepted JP2 without signature box" >&2
+    exit 1
+fi
+echo "pass: reject JP2 without signature box"

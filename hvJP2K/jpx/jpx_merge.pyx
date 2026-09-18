@@ -170,8 +170,9 @@ def jpx_merge(names_in, jpxname, links):
             box = cython.declare(cython.list)
             box = jpx_common.hv_parse_superbox(ifile, 0, os.fstat(ifile.fileno()).st_size)
 
-            # failed JP2 signature or file type verification
-            if not box or box[0] is None or box[1] is None:
+            if (len(box) < 2
+                    or box[0] is None or box[0].box_id != 'jP  '
+                    or box[1] is None or box[1].box_id != 'ftyp'):
                 raise ValueError('invalid JP2 file: {0}'.format(os.fsdecode(jp2name)))
 
             jp2h = cython.declare(jpx_common_c.hvJP2HeaderBox)
