@@ -48,48 +48,30 @@ def box_bytes(box):
 
 
 @cython.infer_types(False)
-def reader_requirements(headers, metadata, links):
-    num = len(headers)
-    colr = []
+def reader_requirements(headers, rsiz, links):
     opacity_features = set()
-    has_palette = False
 
     for header in headers:
-        has_palette |= jp2_common.first_box(header, 'pclr') is not None
         channel_definition = jp2_common.first_box(header, 'cdef')
         if channel_definition is not None:
             if 1 in channel_definition.channel_type:
                 opacity_features.add(9)
             if 2 in channel_definition.channel_type:
                 opacity_features.add(10)
-        colr.append(tuple((box.method, box.colorspace,
-                           box.icc_profile) for box in header
-                          if box.box_id == 'colr'))
 
-    features = [1, 5]
-    if num > 1:
-        features.extend((2, 19))
-    if opacity_features:
-        features.extend(opacity_features)
-    else:
-        features.append(8)
-    features.extend((15 if links else 12, 18, 20,
-                     22 if len(set(colr)) == 1 else 23, 24, 31))
-    if has_palette:
-        features.append(42)
-
-    for method, colorspace, _ in {value for values in colr for value in values}:
-        if method == 1 and colorspace == 16:
-            features.append(45)
-        elif method == 1 and colorspace == 17:
-            features.append(46)
-        elif method == 2:
-            features.append(43)
+    features = [1]
+    if 2 in rsiz:
+        features.append(4)
+    if any(value not in (1, 2) for value in rsiz):
+        features.append(5)
+    if len(headers) > 1:
+        features.append(2)
+    features.extend(opacity_features)
+    if links:
+        features.append(15)
 
     features = sorted(set(features))
     display_features = set(features)
-    if len(set(metadata)) > 1:
-        features.append(66)
     for mask_length in (1, 2, 4, 8):
         if len(features) <= mask_length * 8:
             break
@@ -175,6 +157,7 @@ def jpx_merge(names_in, jpxname, links):
     empty_jpch_jplh = struct_pack('>I4sI4s', 8, b'jpch', 8, b'jplh')
 
     inputs = []
+    rsiz = []
     # dtbl stream
     dtbl = []
     dtbl_length = 0
@@ -206,6 +189,15 @@ def jpx_merge(names_in, jpxname, links):
                     'linked JPX cannot reference a codestream larger than '
                     '4 GiB: {0}'.format(os.fsdecode(jp2name)))
 
+            ifile.seek(jp2c.offset)
+            codestream_header = ifile.read(8)
+            if (len(codestream_header) != 8
+                    or codestream_header[:4] != b'\xff\x4f\xff\x51'):
+                raise ValueError(
+                    'invalid JPEG 2000 main header: {0}'.format(
+                        os.fsdecode(jp2name)))
+            rsiz.append(struct.unpack('>H', codestream_header[6:])[0])
+
             inputs.append((jp2name, jp2h.header, jp2h.hv_parse(ifile),
                            None if xml_ is None else xml_.xmlbuf,
                            jp2c.offset, jp2c.length))
@@ -214,9 +206,10 @@ def jpx_merge(names_in, jpxname, links):
     with open(jpxname, 'wb') as jpx:
         jpx_write = jpx.write
         jp2box.JPEG2000SignatureBox().write(jpx)
-        jp2box.FileTypeBox(brand='jpx ', compatibility_list=compatibility).write(jpx)
+        jp2box.FileTypeBox(brand='jpx ', minor_version=1,
+                           compatibility_list=compatibility).write(jpx)
         jpx_write(reader_requirements([item[2] for item in inputs],
-                                      [item[3] for item in inputs], links))
+                                      rsiz, links))
 
         head0 = inputs[0][1]
         jp2box.JP2HeaderBox(box=jpx_header(inputs[0][2])).write(jpx)

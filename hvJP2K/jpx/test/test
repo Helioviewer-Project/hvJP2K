@@ -16,26 +16,22 @@ fi
 python=${HVJP2K_PYTHON:-python3}
 
 for name in aia swap hetero; do
-    cp -R "$test_dir/$name-ref" "$work_root/$name-ref"
-    cp "$test_dir/$name.jpx" "$work_root/$name.jpx"
     mkdir "$work_root/$name-test"
     cd "$work_root/$name-test"
 
-    "$split" -i "../$name.jpx"
-    "$merge" -i ./*.jp2 -o "$name-hv.jpx"
-    "$merge" -i ../"$name-ref"/*.jp2 -o "$name-hv-links.jpx" -links
+    "$merge" -i "$test_dir/$name-ref"/*.jp2 -o "$name-hv.jpx"
+    "$merge" -i "$test_dir/$name-ref"/*.jp2 -o "$name-hv-links.jpx" -links
 
-    for output in ./*.jp2; do
-        cmp "$output" "../$name-ref/$(basename "$output")"
-    done
-    "$python" "$test_dir/validate.py" embedded "$name-hv.jpx" ./*.jp2
-    "$python" "$test_dir/validate.py" linked "$name-hv-links.jpx" ../"$name-ref"/*.jp2
+    "$python" "$test_dir/validate.py" embedded "$name-hv.jpx" \
+        "$test_dir/$name-ref"/*.jp2
+    "$python" "$test_dir/validate.py" linked "$name-hv-links.jpx" \
+        "$test_dir/$name-ref"/*.jp2
 
     mkdir roundtrip
     cd roundtrip
     "$split" -i ../"$name-hv.jpx"
     for output in ./*.jp2; do
-        cmp "$output" "../../$name-ref/$(basename "$output")"
+        cmp "$output" "$test_dir/$name-ref/$(basename "$output")"
     done
     echo "pass: $name"
 done

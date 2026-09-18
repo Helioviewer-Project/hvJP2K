@@ -41,12 +41,27 @@ assert [box.box_id for box in boxes[:3]] == ["jP  ", "ftyp", "rreq"]
 assert sum(box.box_id == "rreq" for box in boxes) == 1
 
 ftyp = boxes[1]
+assert ftyp.minor_version == 1
+rsiz = []
+for source in sources:
+    codestream = Jp2k(source).get_codestream(header_only=True)
+    siz = next(segment for segment in codestream.segment if segment.marker_id == "SIZ")
+    rsiz.append(siz.rsiz)
+
+expected_features = [1]
+if 2 in rsiz:
+    expected_features.append(4)
+if any(value not in (1, 2) for value in rsiz):
+    expected_features.append(5)
+if len(sources) > 1:
+    expected_features.append(2)
 if args.mode == "embedded":
     assert ftyp.compatibility_list == ["jpx ", "jp2 ", "jpxb"]
-    assert 12 in boxes[2].standard_flag
 else:
     assert ftyp.compatibility_list == ["jpx "]
-    assert 15 in boxes[2].standard_flag
+    expected_features.append(15)
+
+assert list(boxes[2].standard_flag) == sorted(expected_features)
 
 assert sum(box.box_id == "jpch" for box in boxes) == len(sources)
 assert sum(box.box_id == "jplh" for box in boxes) == len(sources)
