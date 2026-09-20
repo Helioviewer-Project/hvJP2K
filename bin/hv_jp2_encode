@@ -1,191 +1,138 @@
 #!/usr/bin/env python3
 
 import argparse
-import os
+import warnings
+from pathlib import Path
 
 import numpy as np
-from lxml import etree as et
 from astropy.io import fits
+from astropy.time import Time
+from astropy.utils.exceptions import AstropyUserWarning
 
-from hvJP2K.jp2.jp2_write import hv_write_openjp2
-
-
-def header2xml(header):
-    root = et.Element("fits")
-
-    for card in header.cards:
-        if card.keyword in ("", "COMMENT", "HISTORY"):
-            continue
-
-        value = card.value
-        if isinstance(value, str):
-            value = value.strip("'")
-        elif isinstance(value, bool):
-            value = {True: "T", False: "F"}[value]
-        else:
-            value = repr(value)
-            if value.endswith(".0"):
-                value = value.rstrip("0").rstrip(".")
-
-        et.SubElement(root, card.keyword).text = value
-
-    return root
+from hvJP2K.jp2.jp2_encode import COLORMAPS, encode
 
 
-def hv2xml(tree):
-    root = et.Element("helioviewer")
-    if tree is not None:
-        root.append(tree)
+def image_hdu(hdus, index):
+    candidates = hdus if index is None else (hdus[index],)
+    for hdu in candidates:
+        image = hdu.data
+        if image is not None and image.ndim == 2 and image.dtype == np.uint8:
+            return hdu
 
-    return root
-
-
-def fits2xml(header):
-    meta = et.Element("meta")
-    meta.append(header2xml(header))
-    meta.append(hv2xml(None))
-    return meta
+    if index is None:
+        raise ValueError("FITS file contains no two-dimensional 8-bit image")
+    raise ValueError(f"FITS HDU {index} is not a two-dimensional 8-bit image")
 
 
-def xfer_sgamma(img):
-    high = img > 0.0031308
-    np.power(img, 0.416666666666667, out=img, where=high)
-    np.multiply(img, 1.055, out=img, where=high)
-    np.subtract(img, 0.055, out=img, where=high)
-    np.logical_not(high, out=high)
-    np.multiply(img, 12.92, out=img, where=high)
+def corrected_header(header, args):
+    header = header.copy()
+    overrides = {
+        "DATE-OBS": args.date_obs,
+        "TELESCOP": args.telescop,
+        "INSTRUME": args.instrume,
+        "DETECTOR": args.detector,
+        "WAVELNTH": args.wavelnth,
+    }
+    for keyword, value in overrides.items():
+        if value is not None:
+            header[keyword] = value
+
+    if "TELESCOP" not in header and "OBSRVTRY" in header:
+        header["TELESCOP"] = header["OBSRVTRY"]
+    if "DETECTOR" not in header and "INSTRUME" in header:
+        header["DETECTOR"] = header["INSTRUME"]
+    return header
 
 
-def xfer_gamma(img):
-    np.power(img, 0.416666666666667, out=img)
+def output_path(input_path, header, args):
+    directory = Path(args.out_dir) if args.out_dir else Path()
+    if args.out_dateobs_dir:
+        if "DATE-OBS" not in header:
+            raise ValueError("DATE-OBS is required for --out-dateobs-dir")
+        observed = Time(header["DATE-OBS"]).to_datetime()
+        directory /= f"{observed.year:04d}/{observed.month:02d}/{observed.day:02d}"
+
+    directory.mkdir(parents=True, exist_ok=True)
+    basename = input_path.name
+    if Path(basename).suffix.lower() in (".bz2", ".fz", ".gz", ".xz", ".z"):
+        basename = Path(basename).stem
+    return directory / Path(basename).with_suffix(".jp2")
 
 
-def xfer_log(img):
-    np.log1p(img, out=img)
-    img *= 1.442695040888963  # 1/log(2)
-
-
-xfer = {"sgamma": xfer_sgamma, "gamma": xfer_gamma, "log": xfer_log, "linear": None}
-bpps = (8, 12, 16)
-
-parser = argparse.ArgumentParser(description="Encode FITS to HV JP2.")
-parser.add_argument("-i", metavar="fits", help="input FITS filename", required=True)
-parser.add_argument(
-    "-plane",
-    metavar="<data cube plane number>",
-    type=int,
-    nargs="?",
-    default=0,
-    const=0,
-)
-parser.add_argument(
-    "-hdu",
-    metavar="<FITS HDU index to process>",
-    type=int,
-    nargs="?",
-    default=-1,
-    const=-1,
-)
-parser.add_argument(
-    "-layers",
-    metavar="<quality layers number>",
-    type=int,
-    nargs="?",
-    default=4,
-    const=4,
-)
-parser.add_argument(
-    "-cratio", metavar="<compression ratio>", type=float, nargs="?", default=6, const=6
-)
-parser.add_argument(
-    "-bpp",
-    metavar="<bits per pixel>",
-    choices=bpps,
-    type=int,
-    nargs="?",
-    default=8,
-    const=8,
-)
-parser.add_argument(
-    "-f",
-    "--function",
-    choices=list(xfer.keys()),
-    help="pixel transfer function",
-    nargs="?",
-    default="sgamma",
-    const="sgamma",
-)
-parser.add_argument("-v", "--verbose", help="verbose operation", action="store_true")
-args = parser.parse_args()
-
-args.layers = min(16, max(1, args.layers))
-args.cratio = min(128, max(1, args.cratio))
-
-cratios = [args.cratio * 2**i for i in reversed(range(args.layers))]
-
-
-def data_process(hdu):
-    hdu.header["DATE_OBS"] = hdu.header["DATE-OBS"]
-    xml = fits2xml(hdu.header)
-
-    img = hdu.data
-    if len(img.shape) > 2:
-        plane = min(img.shape[0] - 1, max(0, args.plane))
-        img = img[plane]
-    img = img.astype(np.float32)
-
-    np.maximum(img, 0, out=img)
-
-    p = np.percentile(img, (0.05, 99.95))
-    if p[1] - p[0] < 1e-5:
-        img.fill(0)
-    else:
-        np.clip(img, p[0], p[1], out=img)
-        r = 1.0 / (p[1] - p[0])
-        img -= p[0]
-        img *= r
-
-    transfer = xfer[args.function]
-    if transfer is not None:
-        transfer(img)
-
-    np.multiply(img, (1 << args.bpp) - 1, out=img)
-    np.rint(img, out=img)
-    dtype = np.uint8 if args.bpp == 8 else np.uint16
-    img = np.flipud(img.astype(dtype))
-
-    name = os.path.splitext(args.i)[0] + ".jp2"
-    hv_write_openjp2(
-        name,
-        img,
-        args.bpp,
-        xml,
-        prog="RPCL",
-        cratios=cratios,
-        numres=6,
-        psizes=[(128, 128)] * 6,
-        plt=True,
-        irreversible=True,
-        verbose=args.verbose,
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Encode a two-dimensional 8-bit FITS image as Helioviewer JP2."
     )
+    parser.add_argument("-i", "--input", required=True, metavar="FITS")
+    parser.add_argument("--hdu", type=int, help="FITS HDU index")
+    parser.add_argument("-o", "--out-dir", metavar="DIRECTORY")
+    parser.add_argument(
+        "-O",
+        "--out-dateobs-dir",
+        action="store_true",
+        help="write below YYYY/MM/DD derived from DATE-OBS",
+    )
+    parser.add_argument(
+        "-p", "--print-filename", action="store_true", help="print output filename"
+    )
+    parser.add_argument("-c", "--contact", default="swhv@oma.be")
+    parser.add_argument("-C", "--colormap", choices=COLORMAPS)
+    parser.add_argument(
+        "-N",
+        "--no-verify",
+        action="store_true",
+        help="do not verify FITS checksums",
+    )
+    parser.add_argument("--date-obs", help="DATE-OBS keyword override")
+    parser.add_argument("--telescop", help="TELESCOP keyword override")
+    parser.add_argument("--instrume", help="INSTRUME keyword override")
+    parser.add_argument("--detector", help="DETECTOR keyword override")
+    parser.add_argument("--wavelnth", help="WAVELNTH keyword override")
+    parser.add_argument("--cratio", type=float, default=3.3)
+    parser.add_argument("--nlayers", type=int, default=4)
+    parser.add_argument("--nresolutions", type=int, default=6)
+    parser.add_argument("--precinctw", type=int, default=128)
+    parser.add_argument("--precincth", type=int, default=128)
+    parser.add_argument("-v", "--verbose", action="store_true")
+    return parser, parser.parse_args()
 
 
-def process_hdu(hdu):
-    hdu.verify("fix" if args.verbose else "silentfix")
-    if (
-        isinstance(hdu, (fits.PrimaryHDU, fits.ImageHDU, fits.CompImageHDU))
-        and hdu.data is not None
-    ):
-        data_process(hdu)
-        return True
-    else:
-        return False
+def main():
+    parser, args = parse_arguments()
+    input_path = Path(args.input)
+
+    try:
+        with warnings.catch_warnings():
+            if not args.no_verify:
+                warnings.filterwarnings(
+                    "error",
+                    message=r".*(?:Checksum|Datasum) verification failed.*",
+                    category=AstropyUserWarning,
+                )
+            with fits.open(
+                input_path, memmap=True, checksum=not args.no_verify
+            ) as hdus:
+                hdu = image_hdu(hdus, args.hdu)
+                header = corrected_header(hdu.header, args)
+                output = output_path(input_path, header, args)
+                encode(
+                    hdu.data,
+                    header,
+                    output,
+                    colormap=args.colormap,
+                    contact=args.contact,
+                    compression_ratio=args.cratio,
+                    layers=args.nlayers,
+                    resolutions=args.nresolutions,
+                    precinct=(args.precincth, args.precinctw),
+                    verbose=args.verbose,
+                )
+    except (AstropyUserWarning, IndexError, OSError, RuntimeError, ValueError) as error:
+        parser.error(str(error))
+
+    if args.print_filename:
+        print(output)
 
 
-with fits.open(args.i, memmap=True) as hdus:
-    if args.hdu <= -1:
-        for hdu in hdus:
-            if process_hdu(hdu):
-                break
-    else:
-        process_hdu(hdus[args.hdu])
+if __name__ == "__main__":
+    main()

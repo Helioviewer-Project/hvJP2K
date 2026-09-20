@@ -10,13 +10,14 @@ import warnings
 import numpy as np
 from glymur import jp2box
 from glymur.lib import openjp2 as opj2
-from glymur.core import PROGRESSION_ORDER, GREYSCALE
+from glymur.core import GREYSCALE, PROGRESSION_ORDER, SRGB
 from lxml import etree
 
 from .jp2_common import require_openjpeg
 
 
-def hv_write_openjp2(name, img, bpp, xml, **kwargs):
+def hv_write_openjp2(name, img, bpp, xml, palette=None, **kwargs):
+    """Write image samples, metadata, and an optional palette as a JP2 file."""
 
     require_openjpeg()
     head = BytesIO()
@@ -28,17 +29,32 @@ def hv_write_openjp2(name, img, bpp, xml, **kwargs):
         xml_tree = xml.getroottree()
     else:
         xml_tree = etree.ElementTree(xml)
+    header_boxes = [
+        jp2box.ImageHeaderBox(height=nrows, width=ncols, bits_per_component=bpp),
+        jp2box.ColourSpecificationBox(
+            colorspace=GREYSCALE if palette is None else SRGB
+        ),
+    ]
+    if palette is not None:
+        header_boxes.extend(
+            (
+                jp2box.PaletteBox(
+                    palette=palette,
+                    bits_per_component=(8, 8, 8),
+                    signed=(False, False, False),
+                ),
+                jp2box.ComponentMappingBox(
+                    component_index=(0, 0, 0),
+                    mapping_type=(1, 1, 1),
+                    palette_index=(0, 1, 2),
+                ),
+            )
+        )
+
     boxes = (
         jp2box.JPEG2000SignatureBox(),
         jp2box.FileTypeBox(),
-        jp2box.JP2HeaderBox(
-            box=(
-                jp2box.ImageHeaderBox(
-                    height=nrows, width=ncols, bits_per_component=bpp
-                ),
-                jp2box.ColourSpecificationBox(colorspace=GREYSCALE),
-            )
-        ),
+        jp2box.JP2HeaderBox(box=tuple(header_boxes)),
         jp2box.XMLBox(xml_tree),
     )
 
@@ -164,11 +180,15 @@ def __write_openjp2(img_array, filename, comp_prec=8, verbose=False, **kwargs):
 
     with ExitStack() as stack:
         image = opj2.image_create(comptparms, opj2.CLRSPC_GRAY)
+        if not image:
+            raise RuntimeError("OpenJPEG could not create the image")
         stack.callback(opj2.image_destroy, image)
 
         __populate_image_struct(image, img_array, comp_prec, cparams)
 
         codec = opj2.create_compress(cparams.codec_fmt)
+        if not codec:
+            raise RuntimeError("OpenJPEG could not create the encoder")
         stack.callback(opj2.destroy_codec, codec)
 
         info_handler = _INFO_CALLBACK if verbose else None
@@ -181,6 +201,8 @@ def __write_openjp2(img_array, filename, comp_prec=8, verbose=False, **kwargs):
             opj2.encoder_set_extra_options(codec, plt=True)
 
         strm = opj2.stream_create_default_file_stream(filename, False)
+        if not strm:
+            raise RuntimeError("OpenJPEG could not create the output stream")
         stack.callback(opj2.stream_destroy, strm)
 
         opj2.start_compress(codec, image, strm)

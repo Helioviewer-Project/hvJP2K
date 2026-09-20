@@ -52,11 +52,80 @@ which are ignored by Git.
 hv_jp2_encode -i image.fits
 ```
 
-The output is written as `image.jp2` beside the input. The encoder selects the
-first image HDU by default, scales its pixels, and writes an `esajpip`-ready
-codestream with RPCL progression, explicit precincts, and PLT packet-length
-markers. Use `-hdu` or `-plane` to select a particular image, and use `-layers`,
-`-cratio`, `-bpp`, or `-f` to control the encoding.
+| Argument | Default | Purpose |
+| --- | --- | --- |
+| `-i FITS`, `--input FITS` | required | Input FITS file. |
+| `--hdu INDEX` | first suitable HDU | Select a particular HDU. |
+| `-o DIRECTORY`, `--out-dir DIRECTORY` | current directory | Set the base output directory. |
+| `-O`, `--out-dateobs-dir` | off | Append `YYYY/MM/DD` derived from `DATE-OBS` to the output directory. |
+| `-p`, `--print-filename` | off | Print the completed output path. |
+| `-c CONTACT`, `--contact CONTACT` | `swhv@oma.be` | Set the contact recorded in the Helioviewer metadata. |
+| `-C NAME`, `--colormap NAME` | none | Embed a packaged RGB palette. |
+| `-N`, `--no-verify` | off | Do not verify FITS checksums. |
+| `--date-obs VALUE` | none | Replace `DATE-OBS` in the embedded metadata. |
+| `--telescop VALUE` | none | Replace `TELESCOP` in the embedded metadata. |
+| `--instrume VALUE` | none | Replace `INSTRUME` in the embedded metadata. |
+| `--detector VALUE` | none | Replace `DETECTOR` in the embedded metadata. |
+| `--wavelnth VALUE` | none | Replace `WAVELNTH` in the embedded metadata. |
+| `--cratio RATIO` | `3.3` | Set the OpenJPEG compression ratio. |
+| `--nlayers COUNT` | `4` | Set the number of quality layers. |
+| `--nresolutions COUNT` | `6` | Set the number of resolutions. |
+| `--precinctw PIXELS` | `128` | Set the precinct width. |
+| `--precincth PIXELS` | `128` | Set the precinct height. |
+| `-v`, `--verbose` | off | Enable OpenJPEG diagnostic output. |
+
+The encoder selects the first HDU whose logical image is a two-dimensional
+`uint8` array. This works for both ordinary image HDUs and tiled-compressed
+images stored in binary-table HDUs. Its base directory is the current
+directory or `--out-dir`; `--out-dateobs-dir` appends the observation-date
+`YYYY/MM/DD` hierarchy. Use `--hdu` to select a particular HDU.
+
+Pixels are copied without clipping, scaling, or transfer functions and are
+flipped vertically from FITS to raster-image order. The codestream uses RPCL
+progression, PLT packet-length markers, four quality layers, six resolutions,
+128 by 128 precincts, and a compression ratio of 3.3 by default. The
+`--nlayers`, `--nresolutions`, `--precinctw`, `--precincth`, and `--cratio`
+options change those settings.
+
+The default output is grayscale. `--colormap NAME` embeds one of the packaged
+256-entry RGB palettes while retaining a single 8-bit codestream component.
+Run `hv_jp2_encode --help` for the available names.
+
+`--date-obs`, `--telescop`, `--instrume`, `--detector`, and `--wavelnth`
+replace values in the metadata copy embedded in the JP2. `--out-dir` selects the
+output directory, `--out-dateobs-dir` adds a `YYYY/MM/DD` hierarchy, and
+`--print-filename` prints the completed output path.
+
+The embedded XML contains the logical FITS header, including joined long-string
+values, repeated commentary cards, HIERARCH keywords, values, and comments.
+XML escaping does not alter their text. Characters forbidden by XML 1.0 are
+replaced with the Unicode replacement character. FITS checksums are verified
+when present; `--no-verify` disables that check. `--contact` sets the contact
+record added to the Helioviewer metadata.
+
+Python producers can bypass the intermediate FITS file and call the same
+encoder directly:
+
+```python
+from hvJP2K.jp2.jp2_encode import encode
+
+encode(
+    image,
+    header,
+    "image.jp2",
+    colormap=None,
+    contact="swhv@oma.be",
+    compression_ratio=3.3,
+    layers=4,
+    resolutions=6,
+    precinct=(128, 128),  # (height, width)
+    verbose=False,
+)
+```
+
+`image` must be a two-dimensional NumPy `uint8` array in FITS row order, and
+`header` must be an Astropy FITS header. The caller supplies the output name.
+Precinct height and width must be powers of two from 128 through 32768.
 
 ### Verify a JP2 file
 

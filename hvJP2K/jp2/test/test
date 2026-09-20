@@ -8,9 +8,16 @@ trap 'rm -rf "$work_dir"' EXIT
 
 if [ -n "${HVJP2K_BIN:-}" ]; then
     decode="$HVJP2K_BIN/hv_jp2_decode"
+    encode="$HVJP2K_BIN/hv_jp2_encode"
+    verify="$HVJP2K_BIN/hv_jp2_verify"
 else
     decode=hv_jp2_decode
+    encode=hv_jp2_encode
+    verify=hv_jp2_verify
 fi
+python=${HVJP2K_PYTHON:-python3}
+
+"$python" "$test_dir/encode.py" "$encode" "$verify"
 
 name=2010_04_01__00_00_28__PROBA2_SWAP_SWAP_174
 "$decode" -i "$test_dir/$name.jp2" -o "$work_dir/$name.ppm" \
