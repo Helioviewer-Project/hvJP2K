@@ -127,6 +127,10 @@ encode(
 `header` must be an Astropy FITS header. The caller supplies the output name.
 Precinct height and width must be powers of two from 128 through 32768.
 
+The encoding defaults form part of the Helioviewer/esajpip profile.
+Adjust `compression_ratio` as needed; changing any other encoding default is
+strongly discouraged.
+
 ### Verify a JP2 file
 
 ```sh
