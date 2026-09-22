@@ -4,7 +4,7 @@ set -eu
 
 dir=${HOME}/hvJP2K
 
-python3 -m venv "$dir"
+python3 -m venv --without-scm-ignore-files "$dir"
 "$dir/bin/pip" install --upgrade pip
 "$dir/bin/pip" install --upgrade .
 "$dir/bin/python" - <<'PY'
