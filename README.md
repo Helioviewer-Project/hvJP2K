@@ -19,8 +19,8 @@ meet the Helioviewer profile, and assembles them into the JPX movies that
 | Command | What it does |
 | --- | --- |
 | `hv_jp2_encode` | Convert a FITS image to a Helioviewer JP2 file. |
-| `hv_jp2_verify` | Check a JP2 file's structure and Helioviewer metadata. |
 | `hv_jp2_decode` | Decode all or part of a JP2 file to an ordinary image. |
+| `hv_jp2_verify` | Check a JP2 file's structure and Helioviewer metadata. |
 | `hv_jp2_transcode` | Add the codestream properties `esajpip` needs to existing JP2 files (requires Kakadu). |
 | `hv_jpx_merge` | Combine JP2 files into an embedded or linked JPX movie. |
 | `hv_jpx_merged` | Keep the merger loaded as a background service. |
@@ -95,6 +95,7 @@ hv_jp2_encode -i image.fits -o /data/jp2 -O -p     # /data/jp2/YYYY/MM/DD/…
 | `-O`, `--out-dateobs-dir` | off | Add a `YYYY/MM/DD` subdirectory taken from `DATE-OBS`. |
 | `-p`, `--print-filename` | off | Print the path of the finished file. |
 | `-N`, `--no-verify` | off | Skip FITS checksum verification. |
+| `--threads N` | `1` | Use 1–64 OpenJPEG threads per image. |
 | `-v`, `--verbose` | off | Show OpenJPEG diagnostics. |
 
 **Metadata**
@@ -164,12 +165,31 @@ encode(
     colormap=None,
     contact="swhv@oma.be",
     compression_ratio=3.3,
+    threads=1,
 )
 ```
 
 - `image`: a two-dimensional NumPy `uint8` array in FITS row order.
 - `header`: an Astropy FITS header.
 - The output filename is the caller's choice.
+
+### `hv_jp2_decode`: JP2 to image
+
+```sh
+hv_jp2_decode -i image.jp2 -o image.png
+```
+
+The output format follows the extension of the output filename.
+
+| Option | Purpose |
+| --- | --- |
+| `-i JP2`, `-o FILE` | Input and output files (both required). |
+| `-reduce N` | Discard `N` resolution levels. |
+| `-region {top,left},{height,width}` | Decode only part of the image. All four values are fractions from 0 to 1. |
+| `-codestream_components` | Suppress multi-component and color transforms. |
+| `-xml` | Print the embedded XML metadata. |
+| `--threads N` | Use 1–64 OpenJPEG threads per image (default 1). |
+| `-v`, `--verbose` | Verbose output. |
 
 ### `hv_jp2_verify`: check a JP2 file
 
@@ -190,23 +210,6 @@ writes the problem to standard error and exits with a nonzero status.
 Besides the Helioviewer metadata schema, the verifier requires what `esajpip`
 relies on: a single tile, RPCL progression, explicit precincts of at least
 128 by 128, and PLT markers. It targets the XML report format of jpylyzer 2.2.1.
-
-### `hv_jp2_decode`: JP2 to image
-
-```sh
-hv_jp2_decode -i image.jp2 -o image.png
-```
-
-The output format follows the extension of the output filename.
-
-| Option | Purpose |
-| --- | --- |
-| `-i JP2`, `-o FILE` | Input and output files (both required). |
-| `-reduce N` | Discard `N` resolution levels. |
-| `-region {top,left},{height,width}` | Decode only part of the image. All four values are fractions from 0 to 1. |
-| `-codestream_components` | Suppress multi-component and color transforms. |
-| `-xml` | Print the embedded XML metadata. |
-| `-v`, `--verbose` | Verbose output. |
 
 ### `hv_jp2_transcode`: upgrade existing JP2 files
 

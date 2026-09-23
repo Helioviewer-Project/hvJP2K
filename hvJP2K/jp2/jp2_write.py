@@ -173,7 +173,9 @@ def __populate_cparams(**kwargs):
     return cparams
 
 
-def __write_openjp2(img_array, filename, comp_prec=8, verbose=False, **kwargs):
+def __write_openjp2(
+    img_array, filename, comp_prec=8, verbose=False, threads=1, **kwargs
+):
 
     cparams = __populate_cparams(**kwargs)
     comptparms = __populate_comptparms(img_array, comp_prec, cparams)
@@ -197,6 +199,8 @@ def __write_openjp2(img_array, filename, comp_prec=8, verbose=False, **kwargs):
         opj2.set_error_handler(codec, _ERROR_CALLBACK)
 
         opj2.setup_encoder(codec, cparams, image)
+        if threads > 1:
+            opj2.codec_set_threads(codec, threads)
         if kwargs.get("plt", False):
             opj2.encoder_set_extra_options(codec, plt=True)
 

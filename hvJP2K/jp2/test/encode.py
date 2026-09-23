@@ -85,6 +85,7 @@ def check_library(work, verify_command):
         output,
         compression_ratio=1,
         precinct=np.array([128, 128]),
+        threads=2,
     )
     verify(verify_command, output)
     assert "Title         : library.jp2" in xml_root(output).findtext(
@@ -136,6 +137,8 @@ def check_library(work, verify_command):
         {"compression_ratio": float("nan")},
         {"precinct": (128.0, 128)},
         {"precinct": (64, 128)},
+        {"threads": 0},
+        {"threads": 65},
     ):
         try:
             encode(image, base_header(), work / "invalid.jp2", **arguments)

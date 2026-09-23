@@ -13,6 +13,7 @@ import numpy as np
 from astropy.io.fits.card import Undefined
 from lxml import etree
 
+from .jp2_common import MAX_THREADS
 from .jp2_write import hv_write_openjp2
 
 COLORMAPS = (
@@ -137,6 +138,7 @@ def encode(
     layers=4,
     resolutions=6,
     precinct=(128, 128),
+    threads=1,
     verbose=False,
 ):
     """Encode a Helioviewer JP2 from a two-dimensional 8-bit FITS image.
@@ -151,6 +153,8 @@ def encode(
         raise ValueError("image must have dtype uint8")
     if image.size == 0:
         raise ValueError("image must not be empty")
+    if not 1 <= threads <= MAX_THREADS:
+        raise ValueError(f"threads must be between 1 and {MAX_THREADS}")
     if (
         isinstance(layers, bool)
         or not isinstance(layers, Integral)
@@ -203,5 +207,6 @@ def encode(
         psizes=[precinct] * resolutions,
         plt=True,
         irreversible=True,
+        threads=threads,
         verbose=verbose,
     )

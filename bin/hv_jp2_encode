@@ -9,6 +9,7 @@ from astropy.io import fits
 from astropy.time import Time
 from astropy.utils.exceptions import AstropyUserWarning
 
+from hvJP2K.jp2.jp2_common import MAX_THREADS
 from hvJP2K.jp2.jp2_encode import COLORMAPS, encode
 
 
@@ -93,12 +94,15 @@ def parse_arguments():
     parser.add_argument("--nresolutions", type=int, default=6)
     parser.add_argument("--precinctw", type=int, default=128)
     parser.add_argument("--precincth", type=int, default=128)
+    parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("-v", "--verbose", action="store_true")
     return parser, parser.parse_args()
 
 
 def main():
     parser, args = parse_arguments()
+    if not 1 <= args.threads <= MAX_THREADS:
+        parser.error(f"--threads must be between 1 and {MAX_THREADS}")
     input_path = Path(args.input)
 
     try:
@@ -125,6 +129,7 @@ def main():
                     layers=args.nlayers,
                     resolutions=args.nresolutions,
                     precinct=(args.precincth, args.precinctw),
+                    threads=args.threads,
                     verbose=args.verbose,
                 )
     except (AstropyUserWarning, IndexError, OSError, RuntimeError, ValueError) as error:

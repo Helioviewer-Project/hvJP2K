@@ -3,6 +3,7 @@
 import re
 import argparse
 
+from hvJP2K.jp2.jp2_common import MAX_THREADS
 from hvJP2K.jp2.jp2_decode import jp2_decode
 
 parser = argparse.ArgumentParser(description="Decode JP2 files.")
@@ -27,8 +28,12 @@ parser.add_argument(
 parser.add_argument(
     "-xml", help="print to terminal the XML metadata", action="store_true"
 )
+parser.add_argument("--threads", type=int, default=1)
 parser.add_argument("-v", "--verbose", help="verbose operation", action="store_true")
 args = parser.parse_args()
+
+if not 1 <= args.threads <= MAX_THREADS:
+    parser.error(f"--threads must be between 1 and {MAX_THREADS}")
 
 area = None
 if args.region is not None:
@@ -46,5 +51,6 @@ jp2_decode(
     rlevel=args.reduce,
     area=area,
     ignore_pclr_cmap_cdef=args.codestream_components,
+    threads=args.threads,
     verbose=args.verbose,
 )

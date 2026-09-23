@@ -1,5 +1,7 @@
 from glymur import version
 
+MAX_THREADS = 64
+
 
 def first_box(boxes, box_id):
     for box in boxes:

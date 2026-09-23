@@ -1,8 +1,8 @@
-from glymur import Jp2k
+from glymur import Jp2k, get_option, set_option
 from lxml import etree as et
 from PIL import Image
 
-from .jp2_common import first_box, require_openjpeg
+from .jp2_common import MAX_THREADS, first_box, require_openjpeg
 
 
 def jp2_decode(
@@ -12,10 +12,15 @@ def jp2_decode(
     rlevel=0,
     area=None,
     ignore_pclr_cmap_cdef=False,
+    threads=1,
     verbose=False,
 ):
 
+    if not 1 <= threads <= MAX_THREADS:
+        raise ValueError(f"threads must be between 1 and {MAX_THREADS}")
     require_openjpeg()
+    if threads != get_option("lib.num_threads"):
+        set_option("lib.num_threads", threads)
     jp2 = Jp2k(name_in)
 
     xml_ = first_box(jp2.box, "xml ")
