@@ -1,110 +1,158 @@
 # hvJP2K
 
-hvJP2K provides the JPEG 2000 tools used by the Helioviewer data pipeline and
-`esajpip`. It can encode Helioviewer JP2 images, validate their structure and
-metadata, and build JPX movies in the format served to JHelioviewer.
+JPEG 2000 tools for the [Helioviewer Project](https://github.com/Helioviewer-Project/hvJP2K).
 
-The package installs these commands:
+hvJP2K turns FITS images into Helioviewer JP2 files, checks that JP2 files
+meet the Helioviewer profile, and assembles them into the JPX movies that
+`esajpip` serves to JHelioviewer.
 
-- `hv_jp2_encode` converts FITS images to Helioviewer JP2.
-- `hv_jp2_verify` validates JP2 structure and the Helioviewer profile.
-- `hv_jp2_decode` decodes all or part of a JP2 image.
-- `hv_jp2_transcode` adds the codestream properties required by `esajpip`.
-- `hv_jpx_merge` builds embedded or linked JPX movies.
-- `hv_jpx_split` extracts the JP2 frames from an embedded JPX movie.
-- `hv_jpx_merged` and `hv_jpx_mergec` provide a persistent merge service for
-  applications such as `esajpip`.
+- [What's included](#whats-included)
+- [Quick start](#quick-start)
+- [Installation](#installation)
+- [JP2 tools](#jp2-tools)
+- [JPX movies](#jpx-movies)
+- [Persistent JPX merge service](#persistent-jpx-merge-service)
+- [Running the tests](#running-the-tests)
 
-## Requirements
+## What's included
+
+| Command | What it does |
+| --- | --- |
+| `hv_jp2_encode` | Convert a FITS image to a Helioviewer JP2 file. |
+| `hv_jp2_verify` | Check a JP2 file's structure and Helioviewer metadata. |
+| `hv_jp2_decode` | Decode all or part of a JP2 file to an ordinary image. |
+| `hv_jp2_transcode` | Add the codestream properties `esajpip` needs to existing JP2 files (requires Kakadu). |
+| `hv_jpx_merge` | Combine JP2 files into an embedded or linked JPX movie. |
+| `hv_jpx_merged` | Keep the merger loaded as a background service. |
+| `hv_jpx_mergec` | Small native client that sends merge requests to `hv_jpx_merged`. |
+| `hv_jpx_split` | Extract the JP2 frames from an embedded JPX movie. |
+
+## Quick start
+
+```sh
+python3 -m pip install .              # build and install the commands
+
+hv_jp2_encode -i image.fits -p        # writes the JP2 and prints its path
+hv_jp2_verify -i image.jp2            # silent on success
+
+hv_jpx_merge -i frame0001.jp2 frame0002.jp2 -o movie.jpx
+```
+
+## Installation
+
+### Requirements
 
 - Python 3.11 or newer
 - A C compiler
 - OpenJPEG 2.4 or newer, available to Glymur at runtime
-- Kakadu's `kdu_transcode` executable for `hv_jp2_transcode` only
+- Kakadu's `kdu_transcode`, **only** for `hv_jp2_transcode`
 
-Python package dependencies are installed automatically. Kakadu is not needed
-for encoding, decoding, verification, JPX merging, or JPX splitting.
+The Python dependencies (Astropy, Glymur, jpylyzer, lxml, NumPy, Pillow) are
+installed automatically. Encoding, decoding, verification, merging and
+splitting all work without Kakadu.
 
-## Installation
+### Install with pip
 
-Install into any Python environment:
+From the repository checkout, install into any Python environment:
 
 ```sh
 python3 -m pip install .
 ```
 
-For example, to use a separate virtual environment:
+or into a dedicated virtual environment:
 
 ```sh
 python3 -m venv /path/to/hvjp2k-venv
 /path/to/hvjp2k-venv/bin/python -m pip install .
 ```
 
-This compiles the Cython extensions and the native `hv_jpx_mergec` client.
-Building in the checkout creates only `build/` and `hvJP2K.egg-info/`, both of
-which are ignored by Git.
+Installing compiles the Cython extensions and the native `hv_jpx_mergec`
+client. The build leaves only `build/` and `hvJP2K.egg-info/` in the checkout,
+and Git ignores both.
+
+### Install with `bootstrap.sh`
+
+`./bootstrap.sh` does the same in one step: it creates a virtual environment
+in `~/hvJP2K`, installs hvJP2K into it, and confirms that Glymur finds
+OpenJPEG 2.4 or newer, printing the library it loaded.
 
 ## JP2 tools
 
-### Encode FITS
+### `hv_jp2_encode`: FITS to JP2
 
 ```sh
 hv_jp2_encode -i image.fits
+hv_jp2_encode -i image.fits -o /data/jp2 -O -p     # /data/jp2/YYYY/MM/DD/…
 ```
 
-| Argument | Default | Purpose |
+**Input and output**
+
+| Option | Default | Purpose |
 | --- | --- | --- |
-| `-i FITS`, `--input FITS` | required | Input FITS file. |
-| `--hdu INDEX` | first suitable HDU | Select a particular HDU. |
-| `-o DIRECTORY`, `--out-dir DIRECTORY` | current directory | Set the base output directory. |
-| `-O`, `--out-dateobs-dir` | off | Append `YYYY/MM/DD` derived from `DATE-OBS` to the output directory. |
-| `-p`, `--print-filename` | off | Print the completed output path. |
-| `-c CONTACT`, `--contact CONTACT` | `swhv@oma.be` | Set the contact recorded in the Helioviewer metadata. |
-| `-C NAME`, `--colormap NAME` | none | Embed a packaged RGB palette. |
-| `-N`, `--no-verify` | off | Do not verify FITS checksums. |
-| `--date-obs VALUE` | none | Replace `DATE-OBS` in the embedded metadata. |
-| `--telescop VALUE` | none | Replace `TELESCOP` in the embedded metadata. |
-| `--instrume VALUE` | none | Replace `INSTRUME` in the embedded metadata. |
-| `--detector VALUE` | none | Replace `DETECTOR` in the embedded metadata. |
-| `--wavelnth VALUE` | none | Replace `WAVELNTH` in the embedded metadata. |
-| `--cratio RATIO` | `3.3` | Set the OpenJPEG compression ratio. |
-| `--nlayers COUNT` | `4` | Set the number of quality layers. |
-| `--nresolutions COUNT` | `6` | Set the number of resolutions. |
-| `--precinctw PIXELS` | `128` | Set the precinct width. |
-| `--precincth PIXELS` | `128` | Set the precinct height. |
-| `-v`, `--verbose` | off | Enable OpenJPEG diagnostic output. |
+| `-i`, `--input FITS` | required | Input FITS file. |
+| `--hdu INDEX` | first suitable HDU | Use this HDU instead. |
+| `-o`, `--out-dir DIRECTORY` | current directory | Base output directory. |
+| `-O`, `--out-dateobs-dir` | off | Add a `YYYY/MM/DD` subdirectory taken from `DATE-OBS`. |
+| `-p`, `--print-filename` | off | Print the path of the finished file. |
+| `-N`, `--no-verify` | off | Skip FITS checksum verification. |
+| `-v`, `--verbose` | off | Show OpenJPEG diagnostics. |
 
-The encoder selects the first HDU whose logical image is a two-dimensional
-`uint8` array. This works for both ordinary image HDUs and tiled-compressed
-images stored in binary-table HDUs. Its base directory is the current
-directory or `--out-dir`; `--out-dateobs-dir` appends the observation-date
-`YYYY/MM/DD` hierarchy. Use `--hdu` to select a particular HDU.
+**Metadata**
 
-Pixels are copied without clipping, scaling, or transfer functions and are
-flipped vertically from FITS to raster-image order. The codestream uses RPCL
-progression, PLT packet-length markers, four quality layers, six resolutions,
-128 by 128 precincts, and a compression ratio of 3.3 by default. The
-`--nlayers`, `--nresolutions`, `--precinctw`, `--precincth`, and `--cratio`
-options change those settings.
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `-c`, `--contact CONTACT` | `swhv@oma.be` | Contact recorded in the Helioviewer metadata. |
+| `-C`, `--colormap NAME` | none (grayscale) | Embed a packaged RGB palette; `--help` lists the names. |
+| `--date-obs`, `--telescop`, `--instrume`, `--detector`, `--wavelnth` | none | Override that keyword in the embedded metadata. |
 
-The default output is grayscale. `--colormap NAME` embeds one of the packaged
-256-entry RGB palettes while retaining a single 8-bit codestream component.
-Run `hv_jp2_encode --help` for the available names.
+**Encoding**
 
-`--date-obs`, `--telescop`, `--instrume`, `--detector`, and `--wavelnth`
-replace values in the metadata copy embedded in the JP2. `--out-dir` selects the
-output directory, `--out-dateobs-dir` adds a `YYYY/MM/DD` hierarchy, and
-`--print-filename` prints the completed output path.
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `--cratio RATIO` | `3.3` | Compression ratio. |
+| `--nlayers COUNT` | `4` | Quality layers. |
+| `--nresolutions COUNT` | `6` | Resolution levels. |
+| `--precinctw PIXELS` | `128` | Precinct width. |
+| `--precincth PIXELS` | `128` | Precinct height. |
 
-The embedded XML contains the logical FITS header, including joined long-string
-values, repeated commentary cards, HIERARCH keywords, values, and comments.
-XML escaping does not alter their text. Characters forbidden by XML 1.0 are
-replaced with the Unicode replacement character. FITS checksums are verified
-when present; `--no-verify` disables that check. `--contact` sets the contact
-record added to the Helioviewer metadata.
+> [!IMPORTANT]
+> The defaults define the **Helioviewer JPEG 2000 profile** that `esajpip` and
+> JHelioviewer rely on:
+>
+> - RPCL progression
+> - PLT packet-length markers
+> - 4 quality layers
+> - 6 resolution levels
+> - 128×128 precincts
+>
+> Only `--cratio` is meant to be tuned. Changing any other encoding option
+> produces files outside the profile.
 
-Python producers can bypass the intermediate FITS file and call the same
-encoder directly:
+How the encoder works:
+
+- **Output name.** The input filename with a `.jp2` extension, so
+  `image.fits` becomes `image.jp2`. A compression suffix (`.gz`, `.bz2`,
+  `.fz`, `.xz`, `.Z`) is dropped first. `--out-dateobs-dir` requires
+  `DATE-OBS` in the header.
+- **Which HDU.** It uses the first HDU whose image is a two-dimensional
+  `uint8` array. This covers both ordinary image HDUs and tile-compressed
+  images stored in binary tables.
+- **Pixels.** Values are copied as-is, with no clipping, scaling or transfer
+  function, and flipped vertically from FITS order to raster order.
+- **Color.** Output is grayscale by default. `--colormap` adds a 256-entry
+  palette while keeping a single 8-bit component.
+- **Metadata.** The JP2 embeds the full logical FITS header as XML, including
+  joined long strings, repeated commentary cards, HIERARCH keywords and
+  comments, with their text unchanged by escaping. Characters that XML 1.0
+  forbids become the Unicode replacement character. The keyword overrides
+  apply only to this embedded copy.
+- **Checksums.** FITS checksums are verified when present, unless `--no-verify`
+  is given.
+
+#### From Python
+
+Producers that already hold the image in memory can skip the intermediate FITS
+file:
 
 ```python
 from hvJP2K.jp2.jp2_encode import encode
@@ -116,120 +164,122 @@ encode(
     colormap=None,
     contact="swhv@oma.be",
     compression_ratio=3.3,
-    layers=4,
-    resolutions=6,
-    precinct=(128, 128),  # (height, width)
-    verbose=False,
 )
 ```
 
-`image` must be a two-dimensional NumPy `uint8` array in FITS row order, and
-`header` must be an Astropy FITS header. The caller supplies the output name.
-Precinct height and width must be powers of two from 128 through 32768.
+- `image`: a two-dimensional NumPy `uint8` array in FITS row order.
+- `header`: an Astropy FITS header.
+- The output filename is the caller's choice.
 
-The encoding defaults form part of the Helioviewer/esajpip profile.
-Adjust `compression_ratio` as needed; changing any other encoding default is
-strongly discouraged.
-
-### Verify a JP2 file
+### `hv_jp2_verify`: check a JP2 file
 
 ```sh
 hv_jp2_verify -i image.jp2
 ```
 
-Success is silent and returns exit status zero. A validation failure is written
-to standard error and returns a nonzero status. `--verbose` prints jpylyzer's
-XML report. Use `--nullxml` only for legacy JP2 files with NUL-terminated XML.
+It prints nothing and exits with status 0 when the file is valid. Otherwise it
+writes the problem to standard error and exits with a nonzero status.
 
-The verifier targets jpylyzer 2.2.1's single-file XML structure. In addition to
-the Helioviewer metadata schema, it requires the properties used by `esajpip`:
-one tile, RPCL progression, explicit precincts of at least 128 by 128, and PLT
-markers.
+| Option | Purpose |
+| --- | --- |
+| `-i JP2` | File to check (required). |
+| `-schema FILE` | Use an alternate Schematron file. |
+| `-n`, `--nullxml` | Accept a NUL-terminated XML box (legacy files only). |
+| `-v`, `--verbose` | Print jpylyzer's full XML report. |
 
-### Decode a JP2 file
+Besides the Helioviewer metadata schema, the verifier requires what `esajpip`
+relies on: a single tile, RPCL progression, explicit precincts of at least
+128 by 128, and PLT markers. It targets the XML report format of jpylyzer 2.2.1.
+
+### `hv_jp2_decode`: JP2 to image
 
 ```sh
 hv_jp2_decode -i image.jp2 -o image.png
 ```
 
-The output format is selected from the output filename. `-reduce N` discards
-resolution levels. `-region {top,left},{height,width}` decodes a normalized
-region of the image, with every value expressed from 0 to 1. `-xml` prints the
-embedded XML metadata.
+The output format follows the extension of the output filename.
 
-### Transcode existing JP2 files
+| Option | Purpose |
+| --- | --- |
+| `-i JP2`, `-o FILE` | Input and output files (both required). |
+| `-reduce N` | Discard `N` resolution levels. |
+| `-region {top,left},{height,width}` | Decode only part of the image. All four values are fractions from 0 to 1. |
+| `-codestream_components` | Suppress multi-component and color transforms. |
+| `-xml` | Print the embedded XML metadata. |
+| `-v`, `--verbose` | Verbose output. |
+
+### `hv_jp2_transcode`: upgrade existing JP2 files
 
 ```sh
 hv_jp2_transcode -d /data/images
 ```
 
-This recursively finds `.jp2` files and uses `kdu_transcode` to add RPCL
-progression, 128 by 128 precincts, and PLT markers without recompressing image
-samples. Each source file is replaced after its transcoded copy has been
-written successfully. Use `--xml-rewrite` when the XML box must also be
-rewritten.
+Recursively finds `.jp2` files under the directory and uses Kakadu's
+`kdu_transcode` to add RPCL progression, 128 by 128 precincts and PLT markers
+without recompressing the image. Each file is replaced only after its
+transcoded copy has been written successfully. Add `-x`/`--xml-rewrite` to
+rewrite the XML box as well.
 
 ## JPX movies
 
-Input order is frame order. To create a self-contained JPX movie:
+A JPX movie is a sequence of JP2 frames, in the order given on the command
+line. There are two kinds:
+
+- **Embedded** movies copy every frame into the JPX file. They are
+  self-contained.
+- **Linked** movies store only fragment tables and absolute `file:` URIs that
+  point to the original JP2 files. They are much smaller, but those files must
+  stay readable at the same paths for `esajpip`, JHelioviewer or any other
+  reader.
 
 ```sh
+# Embedded
 hv_jpx_merge -i frame0001.jp2 frame0002.jp2 frame0003.jp2 -o movie.jpx
-```
 
-To create a linked JPX movie:
-
-```sh
+# Linked
 hv_jpx_merge -i frame0001.jp2 frame0002.jp2 frame0003.jp2 \
     -links -o movie-linked.jpx
 ```
 
-An embedded movie copies every codestream into the JPX file. A linked movie is
-much smaller because it contains fragment tables and absolute `file:` URIs for
-the source JP2 files. Those files must remain readable at the recorded paths
-for `esajpip`, JHelioviewer, or another JPX reader to retrieve the frames.
-
-For a sequence too large for the command line, use the request-file layout
-shown in the daemon section below and run the merger directly:
+When the frame list is too long for the command line, put the arguments in a
+request file (see [Submit a merge](#submit-a-merge) for the format) and run:
 
 ```sh
 hv_jpx_merge -s merge.args
 ```
 
-To extract an embedded movie, run the splitter from the directory that should
-receive the numbered files:
+To pull the frames back out of an embedded movie, run the splitter in the
+directory that should receive them:
 
 ```sh
-mkdir extracted
-cd extracted
+mkdir extracted && cd extracted
 hv_jpx_split -i ../movie.jpx
 ```
 
-The output files are named `000.jp2`, `001.jp2`, and so on. Use an empty output
-directory to avoid replacing files with those names.
+Frames are written as `000.jp2`, `001.jp2` and so on. Existing files with
+those names are overwritten, so start from an empty directory.
 
 ## Persistent JPX merge service
 
-Starting Python and importing the JPEG 2000 libraries adds overhead to every
-merge. `hv_jpx_merged` keeps the merger loaded, while the small native
-`hv_jpx_mergec` program submits requests and waits for their result.
+Each `hv_jpx_merge` run pays the cost of starting Python and loading the
+JPEG 2000 libraries. For frequent merges, such as those made by `esajpip`,
+`hv_jpx_merged` keeps the merger loaded, and the lightweight native
+`hv_jpx_mergec` client sends it requests.
 
 ### Start and stop the daemon
 
-Start it in the foreground with the default socket:
-
 ```sh
-hv_jpx_merged
+hv_jpx_merged                        # listens on /tmp/hv_jpx_merged_socket
 ```
 
-The default socket is `/tmp/hv_jpx_merged_socket`. Press Ctrl-C to stop the
-daemon and remove the socket. Starting another daemon on an active socket
-fails. A socket left behind by a terminated daemon is detected and replaced at
-the next start. The command does not fork or create a PID file. Restart it after
-upgrading hvJP2K so the process loads the newly installed code.
+- It runs in the foreground; it does not fork or write a PID file.
+- Ctrl-C stops it and removes the socket.
+- A second daemon on a socket that is in use refuses to start. A stale socket
+  left by a crashed daemon is replaced automatically.
+- Restart it after upgrading hvJP2K so that it loads the new code.
 
-For production, run the foreground process under the local service manager and
-place its socket in a directory accessible only to the service and its client:
+**In production**, run it under your service manager and put the socket in a
+directory that only the service and its clients can reach:
 
 ```sh
 runtime_dir="${XDG_RUNTIME_DIR:-/tmp}/hvjp2k-$(id -u)"
@@ -238,14 +288,13 @@ chmod 700 "$runtime_dir"
 hv_jpx_merged --socket "$runtime_dir/merge.socket"
 ```
 
-The daemon processes filesystem paths with the permissions of its own user.
-Restricting access to the socket prevents unrelated local users from submitting
-merge requests.
+The daemon reads and writes files with its own user's permissions, so
+restricting the socket keeps other local users from submitting merges.
 
 ### Submit a merge
 
-Write the normal `hv_jpx_merge` arguments to a request file. Arguments can be
-separated by spaces or newlines, and input paths can be comma-separated:
+A request file holds the usual `hv_jpx_merge` arguments, separated by spaces
+or newlines. Input paths may also be comma-separated:
 
 ```text
 -i /data/frame0001.jp2,/data/frame0002.jp2,/data/frame0003.jp2
@@ -253,46 +302,37 @@ separated by spaces or newlines, and input paths can be comma-separated:
 -o /data/movie.jpx
 ```
 
-Submit it to the default socket:
+Leave out `-links` for an embedded movie. Paths containing spaces or other
+special characters can use shell-style quoting or backslash escapes.
 
 ```sh
-hv_jpx_mergec -s merge.args
-```
-
-For a custom socket, pass the same path to both processes:
-
-```sh
+hv_jpx_mergec -s merge.args                                   # default socket
 hv_jpx_mergec -s merge.args --socket "$runtime_dir/merge.socket"
+hv_jpx_mergec --socket "$runtime_dir/merge.socket" < merge.args   # from stdin
 ```
 
-The client can also read a request from standard input:
+The client and the daemon must use the same socket path.
 
-```sh
-hv_jpx_mergec --socket "$runtime_dir/merge.socket" < merge.args
-```
+`hv_jpx_mergec` waits until the movie is written:
 
-Omit `-links` from the request to create an embedded movie. Shell-style quoting
-and backslash escaping are accepted when a path contains whitespace or other
-special characters.
+- **Success:** exit status 0.
+- **Failure** (bad arguments, unreadable input, unwritable output): nonzero
+  exit status and a message on standard error. The full traceback is in the
+  daemon's log, and the daemon keeps serving later requests.
 
-`hv_jpx_mergec` blocks until the output is complete. It returns zero after a
-successful merge. Parse, input, and output errors return a nonzero status and
-are written to standard error; the full traceback remains in the daemon log.
-The daemon continues serving subsequent requests after a failed merge.
+Several clients can be served at once, each waiting for its own result.
+Overlapping requests add up in memory and I/O use.
 
-The daemon accepts multiple clients concurrently, and each client waits for its
-own response. Overlapping requests can increase aggregate memory and I/O use.
+## Running the tests
 
-## Tests
-
-With the installed commands on `PATH`, run:
+With the installed commands on your `PATH`:
 
 ```sh
 ./hvJP2K/jp2/test/test
 ./hvJP2K/jpx/test/test
 ```
 
-To test an installation whose commands are not on `PATH`:
+To test an installation that is not on your `PATH`, point the tests at it:
 
 ```sh
 HVJP2K_BIN="/path/to/hvjp2k-venv/bin" \
@@ -300,4 +340,6 @@ HVJP2K_PYTHON="/path/to/hvjp2k-venv/bin/python" \
 ./hvJP2K/jpx/test/test
 ```
 
-The project is distributed under the MIT license.
+## License
+
+MIT; see [LICENSE](LICENSE).
