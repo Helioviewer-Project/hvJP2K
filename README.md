@@ -227,14 +227,18 @@ Add `-x`/`--xml-rewrite` to rewrite the XML box as well.
 
 In the default mode, only the packet layer changes: the code-blocks, with their
 coding passes and bytes, are regrouped into the new precincts and new packet
-headers are written. For the JSOC AIA test file, the codestream is
-byte-identical to `kdu_transcode` 7.7 output except for the `COM` marker,
-which keeps the input's comment. The Python mode works for single-tile
-codestreams in any progression order, without COC, RGN, POC, PPM or PPT
-markers or tile-part coding parameters, whose code-block style has neither
-selective arithmetic coding bypass nor termination on each coding pass, and
-whose code-block partition the new precincts leave unchanged (true for the
-64×64 code-blocks of JSOC AIA files). SOP and EPH markers are dropped.
+headers are written. Its codestream matches the Kakadu reference for each of
+the six fixtures under `jp2/test/transcode/orig`, except for `COM`: the JSOC
+AIA reference uses Kakadu 7.7, and the four EUI FSI 174 and three-component
+CPRL references use 7.10.3. The SOP/EPH fixture also matches 7.10.3 when
+Kakadu is given `Cuse_sop=no Cuse_eph=no`. The Python mode accepts complete
+single-tile codestreams in any progression order. They must have no COC, RGN,
+POC, PPM, or PPT markers or tile-part coding parameters. Their code-block
+style must omit selective arithmetic coding bypass and per-pass termination.
+The target precincts must preserve the code-block partition, as they do for
+the 64×64 blocks in JSOC AIA. SOP and EPH markers are dropped.
+Kakadu mode retains SOP and EPH markers present in the input by default, so
+the two modes produce different codestreams for such files.
 
 ## JPX movies
 

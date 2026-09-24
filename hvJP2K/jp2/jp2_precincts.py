@@ -11,11 +11,11 @@ That is possible as long as the new precincts leave the code-block
 partition unchanged: precincts smaller than the code-blocks clip them, and
 the blocks of one partition must be the blocks of the other.
 
-Supported input: one tile (any number of tile-parts), any progression order,
-no COC, RGN, POC, PPM or PPT markers, no coding parameters in tile-part
-headers, and code-block styles without selective arithmetic coding bypass or
-termination on each coding pass.  SOP/EPH markers in the input are skipped
-and not written.
+Supported input: complete one-tile codestreams (any number of tile-parts),
+any progression order, no COC, RGN, POC, PPM or PPT markers, no coding
+parameters in tile-part headers, and code-block styles without selective
+arithmetic coding bypass or termination on each coding pass.  SOP/EPH
+markers in the input are skipped and not written.
 """
 
 import struct
@@ -48,6 +48,10 @@ class _BitReader:
         if self.ct == 0:
             # After 0xFF the next byte carries only 7 bits.
             self.ct = 7 if self.buf == 0xFF else 8
+            if self.pos >= len(self.data):
+                raise ValueError(
+                    "truncated input is not supported: incomplete packet header"
+                )
             self.buf = self.data[self.pos]
             self.pos += 1
         self.ct -= 1
@@ -260,28 +264,68 @@ class _Codestream:
             raise ValueError("only single-tile codestreams are supported")
 
         body = bytearray()
+        self.tile_part_ends = []  # cumulative offsets in the packet data
+        self.zero_psot = False
+        declared_parts = None
         while True:
+            if pos + 2 > len(cs):
+                raise ValueError("missing EOC marker")
             m = struct.unpack(">H", cs[pos : pos + 2])[0]
             if m == _EOC:
+                if pos + 2 != len(cs):
+                    raise ValueError("data after EOC marker")
                 break
             if m != _SOT:
                 raise ValueError("expected SOT at offset {0}".format(pos))
-            psot = struct.unpack(">I", cs[pos + 6 : pos + 10])[0]
+            if pos + 12 > len(cs) - 2:
+                raise ValueError("truncated SOT marker")
+            if struct.unpack(">H", cs[pos + 2 : pos + 4])[0] != 10:
+                raise ValueError("invalid SOT marker length")
+            isot, psot, tpsot, tnsot = struct.unpack_from(">HIBB", cs, pos + 4)
+            if isot != 0:
+                raise ValueError("tile index must be 0")
+            if tpsot != len(self.tile_part_ends) or tpsot == 255:
+                raise ValueError("out-of-order tile-part index")
+            if tnsot:
+                if declared_parts is not None and tnsot != declared_parts:
+                    raise ValueError("inconsistent tile-part count")
+                declared_parts = tnsot
+                if tpsot >= tnsot:
+                    raise ValueError("tile-part index exceeds declared count")
+            if psot == 0:
+                if declared_parts is not None and tpsot != declared_parts - 1:
+                    raise ValueError("Psot=0 is only valid for the last tile-part")
+                if cs[-2:] != b"\xff\xd9":
+                    raise ValueError("missing EOC marker")
+                self.zero_psot = True
             end = pos + psot if psot else len(cs) - 2
+            if end < pos + 14 or end > len(cs) - 2:
+                raise ValueError("invalid tile-part length")
             p = pos + 12
             while True:
+                if p + 2 > end:
+                    raise ValueError("tile-part has no SOD marker")
                 mm = struct.unpack(">H", cs[p : p + 2])[0]
                 if mm == _SOD:
                     p += 2
                     break
+                if p + 4 > end:
+                    raise ValueError("truncated tile-part marker")
                 LL = struct.unpack(">H", cs[p + 2 : p + 4])[0]
                 if mm not in (_PLT, _COM):
                     raise ValueError(
                         "unsupported tile-part marker 0x{0:04X}".format(mm)
                     )
+                if LL < 2 or p + 2 + LL > end:
+                    raise ValueError("invalid tile-part marker length")
                 p += 2 + LL
             body += cs[p:end]
+            self.tile_part_ends.append(len(body))
             pos = end
+        if not self.tile_part_ends:
+            raise ValueError("no tile-parts")
+        if declared_parts is not None and len(self.tile_part_ends) != declared_parts:
+            raise ValueError("tile-part count differs from TNsot")
         self.body = bytes(body)
 
     def _siz(self, b):
@@ -446,9 +490,19 @@ def _read_packets(cs, blocks):
                     blocks[key] = _Block(cs.layers)
     trees = {}
     data = cs.body
+    ends = cs.tile_part_ends
     pos = 0
+    part = 0
     sop, eph = cs.scod & 2, cs.scod & 4
     for prc, l in _packet_order(cs, geom, cs.order):
+        # For Psot=0, another SOT can only be identified at a packet boundary.
+        if cs.zero_psot and data[pos : pos + 2] == b"\xff\x90":
+            raise ValueError("Psot=0 is only valid for the last tile-part")
+        # Empty tile-parts share an end offset with the preceding part.
+        while part < len(ends) and pos == ends[part]:
+            part += 1
+        if part == len(ends):
+            raise ValueError("truncated input is not supported: missing packets")
         if sop and data[pos : pos + 2] == b"\xff\x91":
             pos += 6
         t = trees.get(id(prc))
@@ -489,8 +543,15 @@ def _read_packets(cs, blocks):
             blk.layers[l] = (n, data[pos : pos + length])
             pos += length
         if pos > len(data):
-            raise ValueError("packet data overruns the tile")
-    return pos
+            raise ValueError(
+                "truncated input is not supported: packet data overruns the tile"
+            )
+        if pos > ends[part]:
+            raise ValueError("packet crosses a tile-part boundary")
+    if pos != len(data):
+        if cs.zero_psot and data[pos : pos + 2] == b"\xff\x90":
+            raise ValueError("Psot=0 is only valid for the last tile-part")
+        raise ValueError("{0} unparsed tile bytes".format(len(data) - pos))
 
 
 def _write_packets(cs, blocks, precincts):

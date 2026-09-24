@@ -1,11 +1,17 @@
-"""Compare a transcoded JP2 file with the kdu_transcode reference.
+"""Compare decoded pixels and a transcoded JP2 with the Kakadu reference.
 
 Every box must be byte-identical, except that COM marker segments in the
 codestream are ignored: hvJP2K keeps the input's comment, while Kakadu
 writes its own version string."""
 
+import re
 import struct
 import sys
+import warnings
+from pathlib import Path
+
+import glymur
+import numpy as np
 
 
 def boxes(data):
@@ -34,7 +40,28 @@ def without_comments(cs):
         pos += 2 + length
 
 
-def main(output, reference):
+def main(original, output, reference):
+    with warnings.catch_warnings():
+        # Glymur compares IHDR with Xsiz/Ysiz without subtracting the origin.
+        if re.search(r"_origin\d+_", Path(original).name):
+            warnings.filterwarnings(
+                "ignore",
+                message=r"The IHDR dimensions .* do not match the codestream dimensions .*",
+                category=UserWarning,
+                module=r"glymur\.jp2kr",
+            )
+        source_pixels = glymur.Jp2k(original)[:]
+        output_pixels = glymur.Jp2k(output)[:]
+    # Fixture names with dimensions must keep exercising those exact sizes.
+    dimensions = re.search(r"_(\d+)x(\d+)_", Path(original).name)
+    if dimensions and source_pixels.shape[:2] != (
+        int(dimensions.group(2)),
+        int(dimensions.group(1)),
+    ):
+        sys.exit("fixture dimensions differ from filename")
+    if not np.array_equal(source_pixels, output_pixels):
+        sys.exit("decoded pixels differ from input")
+
     with open(output, "rb") as f:
         out = list(boxes(f.read()))
     with open(reference, "rb") as f:

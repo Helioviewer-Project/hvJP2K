@@ -14,12 +14,47 @@ else
     verify=hv_jp2_verify
 fi
 python=${HVJP2K_PYTHON:-python3}
+# Glymur compares IHDR against Xsiz/Ysiz without subtracting the known origin.
+origin_warning='ignore:The IHDR dimensions:UserWarning:glymur.jp2kr'
 
-# trans/ holds the output of kdu_transcode Corder=RPCL ORGgen_plt=yes
-# Cprecincts={128,128} (Kakadu 7.7) for the JSOC file in orig/.
+# trans/ holds the corresponding Kakadu output for each file in orig/.
+for input in "$test_dir"/orig/*.jp2; do
+    name=${input##*/}
+    cp "$input" "$work_dir/$name"
+done
+PYTHONWARNINGS="$origin_warning" "$transcode" -d "$work_dir" --xml-rewrite
+for input in "$test_dir"/orig/*.jp2; do
+    name=${input##*/}
+    "$verify" -i "$work_dir/$name"
+    "$python" "$test_dir/compare.py" "$input" "$work_dir/$name" "$test_dir/trans/$name"
+    echo "pass: $name"
+done
+sop_name=synthetic_rgb_129x129_CPRL_SOP_EPH.jp2
+mkdir "$work_dir/sop_eph"
+cp "$test_dir/sop_eph/$sop_name" "$work_dir/sop_eph/$sop_name"
+"$transcode" -d "$work_dir/sop_eph" --xml-rewrite
+"$verify" -i "$work_dir/sop_eph/$sop_name"
+"$python" "$test_dir/compare.py" "$test_dir/sop_eph/$sop_name" "$work_dir/sop_eph/$sop_name" "$test_dir/sop_eph/trans/$sop_name"
+"$python" "$test_dir/sop_eph.py" "$test_dir/sop_eph/$sop_name" "$work_dir/sop_eph/$sop_name"
+echo "pass: $sop_name"
+if command -v kdu_transcode >/dev/null 2>&1; then
+    mkdir "$work_dir/kdu"
+    for input in "$test_dir"/orig/*.jp2; do
+        cp "$input" "$work_dir/kdu/"
+    done
+    PYTHONWARNINGS="$origin_warning" "$transcode" -d "$work_dir/kdu" --xml-rewrite --kdu-transcode
+    for input in "$test_dir"/orig/*.jp2; do
+        name=${input##*/}
+        "$verify" -i "$work_dir/kdu/$name"
+        "$python" "$test_dir/compare.py" "$input" "$work_dir/kdu/$name" "$test_dir/trans/$name"
+        echo "pass: kdu_transcode $name"
+    done
+    mkdir "$work_dir/sop_eph_kdu"
+    cp "$test_dir/sop_eph/$sop_name" "$work_dir/sop_eph_kdu/$sop_name"
+    "$transcode" -d "$work_dir/sop_eph_kdu" --xml-rewrite --kdu-transcode
+    "$verify" -i "$work_dir/sop_eph_kdu/$sop_name"
+    "$python" "$test_dir/sop_eph.py" "$test_dir/sop_eph/$sop_name" "$work_dir/sop_eph_kdu/$sop_name" keep
+    echo "pass: kdu_transcode $sop_name"
+fi
 name=2015_12_21__00_10_34_34__SDO_AIA_AIA_171.jp2
-cp "$test_dir/orig/$name" "$work_dir/$name"
-"$transcode" -d "$work_dir" --xml-rewrite
-"$verify" -i "$work_dir/$name"
-"$python" "$test_dir/compare.py" "$work_dir/$name" "$test_dir/trans/$name"
-echo "pass: $name"
+"$python" "$test_dir/integrity.py" "$test_dir/trans/$name"
