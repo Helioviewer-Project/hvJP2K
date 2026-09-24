@@ -1,12 +1,21 @@
 """Exercise packet accounting with the bundled Kakadu AIA codestream."""
 
+import importlib.util
 import struct
 import sys
 from pathlib import Path
 
-from hvJP2K.jp2.jp2_precincts import transcode_codestream
+from hvJP2K.jp2 import jp2_precincts
+from hvJP2K.jp2.jp2_precincts import _BitReader, _BitWriter, transcode_codestream
 
 from compare import boxes
+
+source_path = Path(jp2_precincts.__file__).with_name("jp2_precincts.py")
+source_spec = importlib.util.spec_from_file_location(
+    "jp2_precincts_source", source_path
+)
+source = importlib.util.module_from_spec(source_spec)
+source_spec.loader.exec_module(source)
 
 
 def tile_part(index, total, data, tile=0):
@@ -30,6 +39,36 @@ def rejects(data, reason):
             raise AssertionError(str(e)) from e
     else:
         raise AssertionError("invalid codestream was accepted: " + reason)
+
+
+wr = _BitWriter()
+for _ in range(8):
+    wr.bit(1)
+wr.bits(0x7F, 7)
+wr.bits(0xFFFF, 16)
+wr.bit(0)
+wr.bits(0x3F, 6)
+wr.bits(0xFF, 8)
+header = wr.flush()
+matches(header, b"\xff\x7f\xff\x7f\xbf\xff\x00", "packet-header stuffing differs")
+rd = _BitReader(header, 0)
+for _ in range(8):
+    matches(rd.bit(), 1, "packet-header bit differs")
+for n, value in ((7, 0x7F), (16, 0xFFFF)):
+    matches(rd.bits(n), value, "packet-header bits differ")
+matches(rd.bit(), 0, "packet-header bit differs")
+for n, value in ((6, 0x3F), (8, 0xFF)):
+    matches(rd.bits(n), value, "packet-header bits differ")
+matches(rd.align(), len(header), "stuffed end byte was not consumed")
+
+wide_header = b"\x7f" * 20
+wide_value = int.from_bytes(wide_header[:9], "big") >> 2
+for module in (jp2_precincts, source):
+    matches(
+        module._BitReader(wide_header, 0).bits(70),
+        wide_value,
+        "70-bit packet-header read differs from Python integer arithmetic",
+    )
 
 
 cs = next(
@@ -114,4 +153,22 @@ rejects(
     main + zero_first + tile_part(1, 2, body[first_packet:]) + b"\xff\xd9",
     "Psot=0 is only valid for the last tile-part",
 )
-print("pass: tile-part boundaries and complete packet consumption")
+fixture_dir = Path(__file__).resolve().parent
+fixtures = sorted(
+    list(fixture_dir.glob("orig/*.jp2"))
+    + list(fixture_dir.glob("trans/*.jp2"))
+    + list(fixture_dir.glob("sop_eph/*.jp2"))
+    + list(fixture_dir.glob("sop_eph/trans/*.jp2"))
+    + list((fixture_dir.parents[2] / "jpx/test").glob("*-ref/*.jp2"))
+)
+for path in fixtures:
+    codestream = next(
+        data for box_id, data in boxes(path.read_bytes()) if box_id == b"jp2c"
+    )
+    matches(
+        source.transcode_codestream(codestream),
+        transcode_codestream(codestream),
+        "compiled and source output differ for " + str(path),
+    )
+print("pass: packet-header stuffing and tile-part integrity")
+print("pass: source and active transcode agree on {0} JP2 files".format(len(fixtures)))

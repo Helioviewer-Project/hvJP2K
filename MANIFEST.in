@@ -1,3 +1,4 @@
 include bin/hv_jpx_mergec.c
+include hvJP2K/jp2/*.pxd
 include hvJP2K/jpx/*.pxd
 include hvJP2K/jpx/*.pyx

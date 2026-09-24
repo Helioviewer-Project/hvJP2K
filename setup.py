@@ -26,6 +26,7 @@ class BuildScripts(build_scripts):
 setup(
     ext_modules=cythonize(
         [
+            "hvJP2K/jp2/jp2_precincts.py",
             "hvJP2K/jpx/jpx_common.pyx",
             "hvJP2K/jpx/jpx_merge.pyx",
         ],

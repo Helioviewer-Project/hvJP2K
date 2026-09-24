@@ -67,7 +67,9 @@ python3 -m venv /path/to/hvjp2k-venv
 
 Installing compiles the Cython extensions and the native `hv_jpx_mergec`
 client. The build leaves only `build/` and `hvJP2K.egg-info/` in the checkout,
-and Git ignores both.
+and Git ignores both. An in-place build (`python setup.py build_ext --inplace`)
+puts a compiled module beside `jp2_precincts.py`. Rebuild after editing that
+source file: Python imports the compiled module first.
 
 ### Install with `bootstrap.sh`
 
@@ -221,8 +223,10 @@ Recursively finds `.jp2` files under the directory and adds RPCL progression,
 128 by 128 precincts and PLT markers without recompressing the image, as
 `kdu_transcode Corder=RPCL ORGgen_plt=yes Cprecincts={128,128}` does. Each
 file is replaced only after its transcoded copy has been written
-successfully. The default mode uses the Python transcoder. To use Kakadu's
-executable from `PATH`, run `hv_jp2_transcode -d /data/images --kdu-transcode`.
+successfully. The default mode uses hvJP2K's transcoder, compiled from its
+Python source when installed. Without a built extension, the Python source
+runs directly. To use Kakadu's executable from `PATH`, run
+`hv_jp2_transcode -d /data/images --kdu-transcode`.
 Add `-x`/`--xml-rewrite` to rewrite the XML box as well.
 
 In the default mode, only the packet layer changes: the code-blocks, with their
