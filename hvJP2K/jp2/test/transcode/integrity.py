@@ -161,14 +161,19 @@ fixtures = sorted(
     + list(fixture_dir.glob("sop_eph/trans/*.jp2"))
     + list((fixture_dir.parents[2] / "jpx/test").glob("*-ref/*.jp2"))
 )
-for path in fixtures:
-    codestream = next(
-        data for box_id, data in boxes(path.read_bytes()) if box_id == b"jp2c"
-    )
-    matches(
-        source.transcode_codestream(codestream),
-        transcode_codestream(codestream),
-        "compiled and source output differ for " + str(path),
-    )
 print("pass: packet-header stuffing and tile-part integrity")
-print("pass: source and active transcode agree on {0} JP2 files".format(len(fixtures)))
+if Path(jp2_precincts.__file__).resolve() == source_path.resolve():
+    print("skip: source and active transcode are the same Python file")
+else:
+    for path in fixtures:
+        codestream = next(
+            data for box_id, data in boxes(path.read_bytes()) if box_id == b"jp2c"
+        )
+        matches(
+            source.transcode_codestream(codestream),
+            transcode_codestream(codestream),
+            "compiled and source output differ for " + str(path),
+        )
+    print(
+        "pass: source and active transcode agree on {0} JP2 files".format(len(fixtures))
+    )

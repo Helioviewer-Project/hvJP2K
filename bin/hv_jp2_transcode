@@ -1,38 +1,114 @@
 #!/usr/bin/env python3
 
 import argparse
+from concurrent.futures import (
+    FIRST_COMPLETED,
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
+    wait,
+)
+from itertools import islice
 import os
 from pathlib import Path
 import shutil
 
 from hvJP2K.jp2.jp2_transcode import jp2_transcode
 
-parser = argparse.ArgumentParser(
-    description="This script is used to transcode HV JP2 files."
-)
-parser.add_argument(
-    "-d",
-    "--directory",
-    metavar="base_dir",
-    help="The directory to transcode",
-    required=True,
-)
-parser.add_argument("-x", "--xml-rewrite", help="Rewrite XML box", action="store_true")
-parser.add_argument(
-    "--kdu-transcode", help="Use Kakadu's kdu_transcode", action="store_true"
-)
-args = parser.parse_args()
 
-for path in sorted(Path(args.directory).rglob("*.jp2")):
-    trans = Path(
-        jp2_transcode(
-            str(path),
-            xml_rewrite=args.xml_rewrite,
-            kdu_transcode=args.kdu_transcode,
-        )
-    )
+def _transcode_file(path, xml_rewrite, kdu_transcode):
     try:
-        shutil.copymode(path, trans)
-        os.replace(trans, path)
-    finally:
-        trans.unlink(missing_ok=True)
+        trans = Path(
+            jp2_transcode(
+                str(path),
+                xml_rewrite=xml_rewrite,
+                kdu_transcode=kdu_transcode,
+            )
+        )
+        try:
+            shutil.copymode(path, trans)
+            os.replace(trans, path)
+        finally:
+            trans.unlink(missing_ok=True)
+    except Exception as exc:
+        raise RuntimeError(f"failed to transcode {path}") from exc
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="This script is used to transcode HV JP2 files."
+    )
+    parser.add_argument(
+        "-d",
+        "--directory",
+        metavar="base_dir",
+        help="The directory to transcode",
+        required=True,
+    )
+    parser.add_argument(
+        "-x", "--xml-rewrite", help="Rewrite XML box", action="store_true"
+    )
+    parser.add_argument(
+        "--kdu-transcode", help="Use Kakadu's kdu_transcode", action="store_true"
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Parallel files (default: 1)",
+    )
+    args = parser.parse_args()
+    if args.workers < 1:
+        parser.error("--workers must be at least 1")
+
+    paths = sorted(Path(args.directory).rglob("*.jp2"))
+    workers = min(args.workers, len(paths))
+    if workers <= 1:
+        for path in paths:
+            _transcode_file(path, args.xml_rewrite, args.kdu_transcode)
+        return
+
+    executor_type = ThreadPoolExecutor if args.kdu_transcode else ProcessPoolExecutor
+    with executor_type(max_workers=workers) as executor:
+        remaining = iter(paths)
+        pending = {
+            executor.submit(
+                _transcode_file, path, args.xml_rewrite, args.kdu_transcode
+            ): path
+            for path in islice(remaining, workers)
+        }
+        while pending:
+            done, _ = wait(pending, return_when=FIRST_COMPLETED)
+            failures = []
+            for future in done:
+                path = pending.pop(future)
+                try:
+                    future.result()
+                except Exception as exc:
+                    failures.append((path, exc))
+            if failures:
+                for future, path in pending.items():
+                    try:
+                        future.result()
+                    except Exception as exc:
+                        failures.append((path, exc))
+                failures.sort(key=lambda failure: failure[0])
+                if len(failures) == 1:
+                    raise failures[0][1]
+                raise ExceptionGroup(
+                    "files failed to transcode", [exc for _, exc in failures]
+                )
+            for _ in done:
+                try:
+                    path = next(remaining)
+                except StopIteration:
+                    break
+                pending[
+                    executor.submit(
+                        _transcode_file, path, args.xml_rewrite, args.kdu_transcode
+                    )
+                ] = path
+
+
+if __name__ == "__main__":
+    main()

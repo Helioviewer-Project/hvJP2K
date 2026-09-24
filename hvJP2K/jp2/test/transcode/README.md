@@ -42,6 +42,10 @@ made with Kakadu 7.10.3 `kdu_transcode` using
 `Corder=RPCL ORGgen_plt=yes Cprecincts={128,128}`, then wrapped as JP2 with
 `--xml-rewrite`. The preexisting AIA reference used Kakadu 7.7.
 
+The built-in transcoder's output for all six `orig/` files and the SOP/EPH
+input matches the corresponding Kakadu references byte for byte except for
+codestream COM markers.
+
 From the repository root, regenerate the EUI and synthetic inputs and their
 Kakadu references into a new, empty directory with:
 

@@ -4,6 +4,7 @@ set -eu
 
 test_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/hvjp2k-transcode-test.XXXXXX")
+work_dir=$(CDPATH= cd -- "$work_dir" && pwd -P)
 trap 'rm -rf "$work_dir"' EXIT
 
 if [ -n "${HVJP2K_BIN:-}" ]; then
@@ -29,6 +30,16 @@ for input in "$test_dir"/orig/*.jp2; do
     "$python" "$test_dir/compare.py" "$input" "$work_dir/$name" "$test_dir/trans/$name"
     echo "pass: $name"
 done
+mkdir "$work_dir/parallel"
+for input in "$test_dir"/orig/*.jp2; do
+    cp "$input" "$work_dir/parallel/"
+done
+PYTHONWARNINGS="$origin_warning" "$transcode" -d "$work_dir/parallel" --xml-rewrite --workers 4
+for input in "$test_dir"/orig/*.jp2; do
+    name=${input##*/}
+    "$python" "$test_dir/compare.py" "$input" "$work_dir/parallel/$name" "$test_dir/trans/$name"
+    echo "pass: parallel $name"
+done
 sop_name=synthetic_rgb_129x129_CPRL_SOP_EPH.jp2
 mkdir "$work_dir/sop_eph"
 cp "$test_dir/sop_eph/$sop_name" "$work_dir/sop_eph/$sop_name"
@@ -42,7 +53,7 @@ if command -v kdu_transcode >/dev/null 2>&1; then
     for input in "$test_dir"/orig/*.jp2; do
         cp "$input" "$work_dir/kdu/"
     done
-    PYTHONWARNINGS="$origin_warning" "$transcode" -d "$work_dir/kdu" --xml-rewrite --kdu-transcode
+    PYTHONWARNINGS="$origin_warning" "$transcode" -d "$work_dir/kdu" --xml-rewrite --kdu-transcode --workers 4
     for input in "$test_dir"/orig/*.jp2; do
         name=${input##*/}
         "$verify" -i "$work_dir/kdu/$name"
@@ -56,5 +67,20 @@ if command -v kdu_transcode >/dev/null 2>&1; then
     "$python" "$test_dir/sop_eph.py" "$test_dir/sop_eph/$sop_name" "$work_dir/sop_eph_kdu/$sop_name" keep
     echo "pass: kdu_transcode $sop_name"
 fi
+mkdir "$work_dir/errors"
+: > "$work_dir/errors/a.jp2"
+: > "$work_dir/errors/b.jp2"
+if "$transcode" -d "$work_dir/errors" > "$work_dir/serial-error.log" 2>&1; then
+    echo "serial transcode accepted invalid files" >&2
+    exit 1
+fi
+grep -Fq "failed to transcode $work_dir/errors/a.jp2" "$work_dir/serial-error.log"
+if "$transcode" -d "$work_dir/errors" --workers 2 > "$work_dir/parallel-error.log" 2>&1; then
+    echo "parallel transcode accepted invalid files" >&2
+    exit 1
+fi
+grep -Fq "failed to transcode $work_dir/errors/a.jp2" "$work_dir/parallel-error.log"
+grep -Fq "failed to transcode $work_dir/errors/b.jp2" "$work_dir/parallel-error.log"
+echo "pass: serial and parallel errors name every failed file"
 name=2015_12_21__00_10_34_34__SDO_AIA_AIA_171.jp2
 "$python" "$test_dir/integrity.py" "$test_dir/trans/$name"

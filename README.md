@@ -227,22 +227,17 @@ successfully. The default mode uses hvJP2K's transcoder, compiled from its
 Python source when installed. Without a built extension, the Python source
 runs directly. To use Kakadu's executable from `PATH`, run
 `hv_jp2_transcode -d /data/images --kdu-transcode`.
-Add `-x`/`--xml-rewrite` to rewrite the XML box as well.
+Add `-x`/`--xml-rewrite` to rewrite the XML box as well. Add `--workers N` to
+transcode up to N files concurrently (default: 1). The built-in mode uses
+processes; Kakadu mode uses threads. If one file fails, files already running
+may finish before the command exits. Each successful file is still replaced
+only after its output is complete. On macOS, starting the process workers can
+leave little speedup for small batches.
 
-In the default mode, only the packet layer changes: the code-blocks, with their
-coding passes and bytes, are regrouped into the new precincts and new packet
-headers are written. Its codestream matches the Kakadu reference for each of
-the six fixtures under `jp2/test/transcode/orig`, except for `COM`: the JSOC
-AIA reference uses Kakadu 7.7, and the four EUI FSI 174 and three-component
-CPRL references use 7.10.3. The SOP/EPH fixture also matches 7.10.3 when
-Kakadu is given `Cuse_sop=no Cuse_eph=no`. The Python mode accepts complete
-single-tile codestreams in any progression order. They must have no COC, RGN,
-POC, PPM, or PPT markers or tile-part coding parameters. Their code-block
-style must omit selective arithmetic coding bypass and per-pass termination.
-The target precincts must preserve the code-block partition, as they do for
-the 64×64 blocks in JSOC AIA. SOP and EPH markers are dropped.
-Kakadu mode retains SOP and EPH markers present in the input by default, so
-the two modes produce different codestreams for such files.
+The built-in mode handles complete single-tile codestreams within the
+[documented limits](hvJP2K/jp2/jp2_precincts.py). It drops SOP and EPH markers;
+Kakadu retains them by default. See the
+[fixture notes](hvJP2K/jp2/test/transcode/README.md) for Kakadu comparisons.
 
 ## JPX movies
 
