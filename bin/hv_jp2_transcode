@@ -18,10 +18,19 @@ parser.add_argument(
     required=True,
 )
 parser.add_argument("-x", "--xml-rewrite", help="Rewrite XML box", action="store_true")
+parser.add_argument(
+    "--kdu-transcode", help="Use Kakadu's kdu_transcode", action="store_true"
+)
 args = parser.parse_args()
 
 for path in sorted(Path(args.directory).rglob("*.jp2")):
-    trans = Path(jp2_transcode(str(path), xml_rewrite=args.xml_rewrite))
+    trans = Path(
+        jp2_transcode(
+            str(path),
+            xml_rewrite=args.xml_rewrite,
+            kdu_transcode=args.kdu_transcode,
+        )
+    )
     try:
         shutil.copymode(path, trans)
         os.replace(trans, path)

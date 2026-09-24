@@ -47,7 +47,8 @@ hv_jpx_merge -i frame0001.jp2 frame0002.jp2 -o movie.jpx
 - OpenJPEG 2.4 or newer, available to Glymur at runtime
 
 The Python dependencies (Astropy, Glymur, jpylyzer, lxml, NumPy, Pillow) are
-installed automatically. None of the commands needs Kakadu.
+installed automatically. Kakadu's `kdu_transcode` is optional and needed only
+for `hv_jp2_transcode --kdu-transcode`.
 
 ### Install with pip
 
@@ -220,18 +221,20 @@ Recursively finds `.jp2` files under the directory and adds RPCL progression,
 128 by 128 precincts and PLT markers without recompressing the image, as
 `kdu_transcode Corder=RPCL ORGgen_plt=yes Cprecincts={128,128}` does. Each
 file is replaced only after its transcoded copy has been written
-successfully. Add `-x`/`--xml-rewrite` to rewrite the XML box as well.
+successfully. The default mode uses the Python transcoder. To use Kakadu's
+executable from `PATH`, run `hv_jp2_transcode -d /data/images --kdu-transcode`.
+Add `-x`/`--xml-rewrite` to rewrite the XML box as well.
 
-Only the packet layer changes: the code-blocks, with their coding passes and
-bytes, are regrouped into the new precincts and new packet headers are
-written. For the JSOC AIA test file the codestream is byte-identical to
-`kdu_transcode` 7.7 output except for the `COM` marker, which keeps the
-input's comment. This works for single-tile codestreams in any progression
-order, without COC, RGN, POC, PPM or PPT markers or tile-part coding
-parameters, whose code-block style has neither selective arithmetic coding
-bypass nor termination on each coding pass, and whose code-block partition the
-new precincts leave unchanged (true for the 64×64 code-blocks of JSOC AIA
-files). SOP and EPH markers are dropped.
+In the default mode, only the packet layer changes: the code-blocks, with their
+coding passes and bytes, are regrouped into the new precincts and new packet
+headers are written. For the JSOC AIA test file, the codestream is
+byte-identical to `kdu_transcode` 7.7 output except for the `COM` marker,
+which keeps the input's comment. The Python mode works for single-tile
+codestreams in any progression order, without COC, RGN, POC, PPM or PPT
+markers or tile-part coding parameters, whose code-block style has neither
+selective arithmetic coding bypass nor termination on each coding pass, and
+whose code-block partition the new precincts leave unchanged (true for the
+64×64 code-blocks of JSOC AIA files). SOP and EPH markers are dropped.
 
 ## JPX movies
 

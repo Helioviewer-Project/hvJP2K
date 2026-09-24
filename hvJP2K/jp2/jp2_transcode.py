@@ -1,4 +1,5 @@
 import os
+import subprocess
 import tempfile
 
 import glymur
@@ -17,7 +18,9 @@ def _codestream(filepath, box):
         return f.read(box.length - skip) if box.length else f.read()
 
 
-def jp2_transcode(filepath, cprecincts=(128, 128), xml_rewrite=False):
+def jp2_transcode(
+    filepath, cprecincts=(128, 128), xml_rewrite=False, kdu_transcode=False
+):
     """Transcodes JPEG 2000 images to allow support for use with JHelioviewer
     and the JPIP server: RPCL progression, the given precincts and PLT markers,
     without recompressing the image (like kdu_transcode Corder=RPCL
@@ -30,8 +33,23 @@ def jp2_transcode(filepath, cprecincts=(128, 128), xml_rewrite=False):
 
     fd, tmp = tempfile.mkstemp(suffix=".j2c")
     try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(transcode_codestream(_codestream(filepath, jp2_cs), cprecincts))
+        if kdu_transcode:
+            os.close(fd)
+            os.unlink(tmp)
+            command = [
+                "kdu_transcode",
+                "-i",
+                filepath,
+                "-o",
+                tmp,
+                "Corder=RPCL",
+                "ORGgen_plt=yes",
+                "Cprecincts={{{0},{1}}}".format(*cprecincts),
+            ]
+            subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
+        else:
+            with os.fdopen(fd, "wb") as f:
+                f.write(transcode_codestream(_codestream(filepath, jp2_cs), cprecincts))
 
         j2c = glymur.Jp2k(tmp)
 
