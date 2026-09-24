@@ -1,3 +1,6 @@
+import math
+from pathlib import Path
+
 from glymur import Jp2k, get_option, set_option
 from lxml import etree as et
 from PIL import Image
@@ -7,11 +10,12 @@ from .jp2_common import MAX_THREADS, first_box, require_openjpeg
 
 def jp2_decode(
     name_in,
-    name_out,
+    name_out=None,
     xml=False,
     rlevel=0,
     area=None,
     ignore_pclr_cmap_cdef=False,
+    record=None,
     threads=1,
     verbose=False,
 ):
@@ -33,16 +37,23 @@ def jp2_decode(
     )
     if cod is None:
         raise ValueError("JPEG 2000 codestream has no COD marker")
+
+    if record is not None:
+        Path(record).write_text(f"Clevels={cod.num_res}\n", encoding="ascii")
+    if name_out is None:
+        return
+
     nrows, ncols = jp2.shape[:2]
 
     if area is not None:
-        # to pixels
-        area = [min(1, max(0, value)) for value in area]
-        area[0] *= nrows
-        area[1] *= ncols
-        area[2] *= nrows
-        area[3] *= ncols
-        area = [int(n + 0.5) for n in area]
+        # Kakadu's -region rounds the upper left down and the lower right up.
+        top, left, bottom, right = area
+        area = [
+            max(0, min(nrows, math.floor(top * nrows))),
+            max(0, min(ncols, math.floor(left * ncols))),
+            max(0, min(nrows, math.ceil(bottom * nrows))),
+            max(0, min(ncols, math.ceil(right * ncols))),
+        ]
 
     rlevel = min(cod.num_res, max(0, rlevel))
 
@@ -53,4 +64,5 @@ def jp2_decode(
         data = jp2[::step, ::step]
     else:
         data = jp2[area[0] : area[2] : step, area[1] : area[3] : step]
+
     Image.fromarray(data).save(name_out)

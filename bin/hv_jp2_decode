@@ -2,13 +2,16 @@
 
 import re
 import argparse
+import math
 
 from hvJP2K.jp2.jp2_common import MAX_THREADS
 from hvJP2K.jp2.jp2_decode import jp2_decode
 
 parser = argparse.ArgumentParser(description="Decode JP2 files.")
 parser.add_argument("-i", metavar="jp2file", help="input JP2 filename", required=True)
-parser.add_argument("-o", metavar="file", help="output filename", required=True)
+parser.add_argument("-o", metavar="file", help="output filename")
+parser.add_argument("-no_decode", action="store_true", help="parse the main header without decoding")
+parser.add_argument("-record", metavar="file", help="write codestream levels to a record file")
 parser.add_argument(
     "-region", metavar="{<top>,<left>},{<height>,<width>}", help="region of interest"
 )
@@ -17,7 +20,6 @@ parser.add_argument(
     metavar="<discard levels>",
     help="resolution levels to be discarded",
     type=int,
-    nargs="?",
     default=0,
 )
 parser.add_argument(
@@ -34,12 +36,24 @@ args = parser.parse_args()
 
 if not 1 <= args.threads <= MAX_THREADS:
     parser.error(f"--threads must be between 1 and {MAX_THREADS}")
+if args.reduce < 0:
+    parser.error("-reduce requires a nonnegative integer")
+if args.no_decode and args.o is not None:
+    parser.error("-no_decode cannot be used with -o")
+if not args.no_decode and args.o is None:
+    parser.error("-o is required unless -no_decode is specified")
 
 area = None
 if args.region is not None:
-    area = [float(n) for n in re.split(r"[{},]", args.region) if n]
-    if len(area) != 4:
+    region = re.fullmatch(r"\{([^,{}]+),([^,{}]+)\},\{([^,{}]+),([^,{}]+)\}", args.region)
+    if region is None:
         parser.error("-region requires {top,left},{height,width}")
+    try:
+        area = [float(value) for value in region.groups()]
+    except ValueError:
+        parser.error("-region requires numeric coordinates")
+    if any(not math.isfinite(value) or value < 0 for value in area):
+        parser.error("-region coordinates must be finite and nonnegative")
     # Convert from (top, left, size) to (top left, bottom right).
     area[2] += area[0]
     area[3] += area[1]
@@ -51,6 +65,7 @@ jp2_decode(
     rlevel=args.reduce,
     area=area,
     ignore_pclr_cmap_cdef=args.codestream_components,
+    record=args.record,
     threads=args.threads,
     verbose=args.verbose,
 )

@@ -183,9 +183,10 @@ The output format follows the extension of the output filename.
 
 | Option | Purpose |
 | --- | --- |
-| `-i JP2`, `-o FILE` | Input and output files (both required). |
+| `-i JP2`, `-o FILE` | Input JP2 and output image. `-o` is omitted with `-no_decode`. |
 | `-reduce N` | Discard `N` resolution levels. |
 | `-region {top,left},{height,width}` | Decode only part of the image. All four values are fractions from 0 to 1. |
+| `-no_decode -record FILE` | Parse the main header without decoding and write `Clevels=N` for the Helioviewer API. |
 | `-codestream_components` | Suppress multi-component and color transforms. |
 | `-xml` | Print the embedded XML metadata. |
 | `--threads N` | Use 1–64 OpenJPEG threads per image (default 1). |
