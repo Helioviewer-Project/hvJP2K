@@ -1,10 +1,19 @@
 # hvJP2K
 
-JPEG 2000 tools for the [Helioviewer Project](https://github.com/Helioviewer-Project/hvJP2K).
+JPEG 2000 tools for the [Helioviewer Project](https://github.com/Helioviewer-Project).
 
-hvJP2K turns FITS images into Helioviewer JP2 files, checks that JP2 files
-meet the Helioviewer profile, and assembles them into the JPX movies that
-`esajpip` serves to JHelioviewer.
+hvJP2K prepares solar images for JHelioviewer:
+
+1. **Encode.** `hv_jp2_encode` turns a FITS image into a JP2 file that follows
+   the Helioviewer JPEG 2000 profile.
+2. **Check.** `hv_jp2_verify` confirms that a JP2 file follows that profile and
+   carries the Helioviewer metadata.
+3. **Upgrade.** `hv_jp2_transcode` brings existing JP2 files into the profile
+   without recompressing them.
+4. **Assemble.** `hv_jpx_merge` combines JP2 frames into the JPX movies that
+   `esajpip` serves to JHelioviewer.
+
+Kakadu is not required. Only `hv_jp2_transcode --kdu-transcode` uses it.
 
 - [What's included](#whats-included)
 - [Quick start](#quick-start)
@@ -16,12 +25,19 @@ meet the Helioviewer profile, and assembles them into the JPX movies that
 
 ## What's included
 
+**JP2 files**
+
 | Command | What it does |
 | --- | --- |
 | `hv_jp2_encode` | Convert a FITS image to a Helioviewer JP2 file. |
 | `hv_jp2_decode` | Decode all or part of a JP2 file to an ordinary image. |
 | `hv_jp2_verify` | Check a JP2 file's structure and Helioviewer metadata. |
-| `hv_jp2_transcode` | Add the codestream properties `esajpip` needs to existing JP2 files. |
+| `hv_jp2_transcode` | Bring existing JP2 files into the Helioviewer profile without recompressing them. |
+
+**JPX movies**
+
+| Command | What it does |
+| --- | --- |
 | `hv_jpx_merge` | Combine JP2 files into an embedded or linked JPX movie. |
 | `hv_jpx_merged` | Keep the merger loaded as a background service. |
 | `hv_jpx_mergec` | Small native client that sends merge requests to `hv_jpx_merged`. |
@@ -34,6 +50,8 @@ python3 -m pip install .              # build and install the commands
 
 hv_jp2_encode -i image.fits -p        # writes the JP2 and prints its path
 hv_jp2_verify -i image.jp2            # silent on success
+
+hv_jp2_transcode -d /data/jp2         # add what esajpip needs, in place
 
 hv_jpx_merge -i frame0001.jp2 frame0002.jp2 -o movie.jpx
 ```
@@ -67,9 +85,7 @@ python3 -m venv /path/to/hvjp2k-venv
 
 Installing compiles the Cython extensions and the native `hv_jpx_mergec`
 client. The build leaves only `build/` and `hvJP2K.egg-info/` in the checkout,
-and Git ignores both. An in-place build (`python setup.py build_ext --inplace`)
-puts a compiled module beside `jp2_precincts.py`. Rebuild after editing that
-source file: Python imports the compiled module first.
+and Git ignores both.
 
 ### Install with `bootstrap.sh`
 
@@ -206,7 +222,7 @@ writes the problem to standard error and exits with a nonzero status.
 | --- | --- |
 | `-i JP2` | File to check (required). |
 | `-schema FILE` | Use an alternate Schematron file. |
-| `-n`, `--nullxml` | Accept a NUL-terminated XML box (legacy files only). |
+| `-n`, `--nullxml` | Accept a NUL-terminated XML box, as Kakadu in IDL writes it. |
 | `-v`, `--verbose` | Print jpylyzer's full XML report. |
 
 Besides the Helioviewer metadata schema, the verifier requires what `esajpip`
@@ -215,29 +231,56 @@ relies on: a single tile, RPCL progression, explicit precincts of at least
 
 ### `hv_jp2_transcode`: upgrade existing JP2 files
 
+JP2 files written by Kakadu in IDL, such as the JSOC AIA images, lack what
+`esajpip` needs: RPCL progression, 128×128 precincts and PLT packet-length
+markers. `hv_jp2_transcode` adds them to every `.jp2` file under a directory,
+recursively. It does not recompress anything, so the images decode exactly as
+before.
+
 ```sh
-hv_jp2_transcode -d /data/images
+hv_jp2_transcode -d /data/images                # one file at a time
+hv_jp2_transcode -d /data/images --workers 8    # up to 8 files at once
 ```
 
-Recursively finds `.jp2` files under the directory and adds RPCL progression,
-128 by 128 precincts and PLT markers without recompressing the image, as
-`kdu_transcode Corder=RPCL ORGgen_plt=yes Cprecincts={128,128}` does. Each
-file is replaced only after its transcoded copy has been written
-successfully. The default mode uses hvJP2K's transcoder, compiled from its
-Python source when installed. Without a built extension, the Python source
-runs directly. To use Kakadu's executable from `PATH`, run
-`hv_jp2_transcode -d /data/images --kdu-transcode`.
-Add `-x`/`--xml-rewrite` to rewrite the XML box as well. Add `--workers N` to
-transcode up to N files concurrently (default: 1). The built-in mode uses
-processes; Kakadu mode uses threads. If one file fails, files already running
-may finish before the command exits. Each successful file is still replaced
-only after its output is complete. On macOS, starting the process workers can
-leave little speedup for small batches.
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `-d`, `--directory DIRECTORY` | required | Transcode every `.jp2` file under this directory. |
+| `-x`, `--xml-rewrite` | off | Also rewrite the XML metadata box, dropping the NUL byte that Kakadu in IDL writes at its end. |
+| `--workers N` | `1` | Transcode up to `N` files at the same time. |
+| `--kdu-transcode` | off | Use Kakadu's `kdu_transcode` from `PATH` instead of the built-in transcoder. |
 
-The built-in mode handles complete single-tile codestreams within the
-[documented limits](hvJP2K/jp2/jp2_precincts.py). It drops SOP and EPH markers;
-Kakadu retains them by default. See the
-[fixture notes](hvJP2K/jp2/test/transcode/README.md) for Kakadu comparisons.
+Files are replaced in place. Each file is replaced only after its transcoded
+copy has been written completely, so a file that fails stays unchanged.
+
+**The built-in transcoder** does what
+`kdu_transcode Corder=RPCL ORGgen_plt=yes Cprecincts={128,128}` does. Only
+the packet layer changes: the code-blocks keep their coding passes and bytes,
+and are regrouped into the new precincts under new packet headers. On the
+[test fixtures](hvJP2K/jp2/test/transcode/README.md), its output matches
+Kakadu's byte for byte, except for the `COM` marker, which keeps the input's
+comment. Installing compiles it with Cython; without the compiled extension,
+the same Python source runs, only more slowly.
+
+It accepts complete single-tile codestreams in any progression order, and
+stops with an error on:
+
+- truncated codestreams;
+- COC, RGN, POC, PPM or PPT markers, or coding parameters in tile-part
+  headers;
+- code-block styles with selective arithmetic coding bypass or termination on
+  each coding pass;
+- code-blocks that 128×128 precincts would split. JSOC AIA files, with 64×64
+  code-blocks, are fine.
+
+It drops SOP and EPH markers. Kakadu keeps them by default, so for files with
+these markers the two modes produce different output. The exact limits are
+documented in [`jp2_precincts.py`](hvJP2K/jp2/jp2_precincts.py).
+
+**Parallel runs.** With `--workers`, the built-in mode uses worker processes
+and Kakadu mode uses threads. If a file fails, no new files are started, but
+files already in progress may still finish and be replaced before the command
+exits. On macOS, each worker process starts from scratch, so small batches
+gain little.
 
 ## JPX movies
 
@@ -347,17 +390,27 @@ Overlapping requests add up in memory and I/O use.
 With the installed commands on your `PATH`:
 
 ```sh
-./hvJP2K/jp2/test/test
-./hvJP2K/jpx/test/test
+./hvJP2K/jp2/test/test    # encoder, decoder, verifier and transcoder
+./hvJP2K/jpx/test/test    # JPX merging and splitting
 ```
+
+The transcoder tests compare against Kakadu output that is checked in, so
+they run without Kakadu. If `kdu_transcode` is on your `PATH`, they also test
+`--kdu-transcode`.
 
 To test an installation that is not on your `PATH`, point the tests at it:
 
 ```sh
-HVJP2K_BIN="/path/to/hvjp2k-venv/bin" \
-HVJP2K_PYTHON="/path/to/hvjp2k-venv/bin/python" \
+export HVJP2K_BIN="/path/to/hvjp2k-venv/bin"
+export HVJP2K_PYTHON="/path/to/hvjp2k-venv/bin/python"
+./hvJP2K/jp2/test/test
 ./hvJP2K/jpx/test/test
 ```
+
+**Editing `jp2_precincts.py`.** Installing compiles this module into an
+extension. An in-place build (`python setup.py build_ext --inplace`) puts the
+compiled module beside the source, and Python imports the compiled module
+first. Rebuild after each edit, or your changes are ignored.
 
 ## License
 
