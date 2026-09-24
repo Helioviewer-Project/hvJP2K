@@ -8,8 +8,10 @@ hvJP2K prepares solar images for JHelioviewer:
    the Helioviewer JPEG 2000 profile.
 2. **Check.** `hv_jp2_verify` confirms that a JP2 file follows that profile and
    carries the Helioviewer metadata.
-3. **Upgrade.** `hv_jp2_transcode` brings existing JP2 files into the profile
-   without recompressing them.
+3. **Upgrade, only for JP2 files from other encoders.** `hv_jp2_transcode`
+   brings JP2 files written elsewhere, such as by Kakadu in IDL, into the
+   profile without recompressing them. Files made by `hv_jp2_encode` already
+   follow the profile and never need it.
 4. **Assemble.** `hv_jpx_merge` combines JP2 frames into the JPX movies that
    `esajpip` serves to JHelioviewer.
 
@@ -32,7 +34,7 @@ Kakadu is not required. Only `hv_jp2_transcode --kdu-transcode` uses it.
 | `hv_jp2_encode` | Convert a FITS image to a Helioviewer JP2 file. |
 | `hv_jp2_decode` | Decode all or part of a JP2 file to an ordinary image. |
 | `hv_jp2_verify` | Check a JP2 file's structure and Helioviewer metadata. |
-| `hv_jp2_transcode` | Bring existing JP2 files into the Helioviewer profile without recompressing them. |
+| `hv_jp2_transcode` | Bring JP2 files from other encoders into the Helioviewer profile without recompressing them. Not needed for `hv_jp2_encode` output. |
 
 **JPX movies**
 
@@ -51,10 +53,12 @@ python3 -m pip install .              # build and install the commands
 hv_jp2_encode -i image.fits -p        # writes the JP2 and prints its path
 hv_jp2_verify -i image.jp2            # silent on success
 
-hv_jp2_transcode -d /data/jp2         # add what esajpip needs, in place
-
 hv_jpx_merge -i frame0001.jp2 frame0002.jp2 -o movie.jpx
 ```
+
+Files from `hv_jp2_encode` go straight to `hv_jpx_merge`. Only JP2 files
+written by other encoders, such as Kakadu in IDL, need
+`hv_jp2_transcode -d /data/jp2` first.
 
 ## Installation
 
@@ -229,7 +233,12 @@ Besides the Helioviewer metadata schema, the verifier requires what `esajpip`
 relies on: a single tile, RPCL progression, explicit precincts of at least
 128 by 128, and PLT markers. It targets the XML report format of jpylyzer 2.2.1.
 
-### `hv_jp2_transcode`: upgrade existing JP2 files
+### `hv_jp2_transcode`: upgrade JP2 files from other encoders
+
+> [!NOTE]
+> Files made by `hv_jp2_encode` already follow the Helioviewer profile and
+> never need `hv_jp2_transcode`. It is only for JP2 files written by other
+> encoders.
 
 JP2 files written by Kakadu in IDL, such as the JSOC AIA images, lack what
 `esajpip` needs: RPCL progression, 128×128 precincts and PLT packet-length
