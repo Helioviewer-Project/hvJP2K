@@ -26,3 +26,5 @@ test "$(cat "$work_dir/record")" = 'Clevels=5'
     -region '{0.6,0.1},{0.3,0.5}' -reduce 2 --threads 2
 cmp "$work_dir/$name.ppm" "$test_dir/$name.ppm"
 echo "pass: $name.jp2"
+
+"$test_dir/transcode/test"

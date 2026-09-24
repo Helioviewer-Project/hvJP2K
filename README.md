@@ -21,7 +21,7 @@ meet the Helioviewer profile, and assembles them into the JPX movies that
 | `hv_jp2_encode` | Convert a FITS image to a Helioviewer JP2 file. |
 | `hv_jp2_decode` | Decode all or part of a JP2 file to an ordinary image. |
 | `hv_jp2_verify` | Check a JP2 file's structure and Helioviewer metadata. |
-| `hv_jp2_transcode` | Add the codestream properties `esajpip` needs to existing JP2 files (requires Kakadu). |
+| `hv_jp2_transcode` | Add the codestream properties `esajpip` needs to existing JP2 files. |
 | `hv_jpx_merge` | Combine JP2 files into an embedded or linked JPX movie. |
 | `hv_jpx_merged` | Keep the merger loaded as a background service. |
 | `hv_jpx_mergec` | Small native client that sends merge requests to `hv_jpx_merged`. |
@@ -45,11 +45,9 @@ hv_jpx_merge -i frame0001.jp2 frame0002.jp2 -o movie.jpx
 - Python 3.11 or newer
 - A C compiler
 - OpenJPEG 2.4 or newer, available to Glymur at runtime
-- Kakadu's `kdu_transcode`, **only** for `hv_jp2_transcode`
 
 The Python dependencies (Astropy, Glymur, jpylyzer, lxml, NumPy, Pillow) are
-installed automatically. Encoding, decoding, verification, merging and
-splitting all work without Kakadu.
+installed automatically. None of the commands needs Kakadu.
 
 ### Install with pip
 
@@ -218,11 +216,22 @@ relies on: a single tile, RPCL progression, explicit precincts of at least
 hv_jp2_transcode -d /data/images
 ```
 
-Recursively finds `.jp2` files under the directory and uses Kakadu's
-`kdu_transcode` to add RPCL progression, 128 by 128 precincts and PLT markers
-without recompressing the image. Each file is replaced only after its
-transcoded copy has been written successfully. Add `-x`/`--xml-rewrite` to
-rewrite the XML box as well.
+Recursively finds `.jp2` files under the directory and adds RPCL progression,
+128 by 128 precincts and PLT markers without recompressing the image, as
+`kdu_transcode Corder=RPCL ORGgen_plt=yes Cprecincts={128,128}` does. Each
+file is replaced only after its transcoded copy has been written
+successfully. Add `-x`/`--xml-rewrite` to rewrite the XML box as well.
+
+Only the packet layer changes: the code-blocks, with their coding passes and
+bytes, are regrouped into the new precincts and new packet headers are
+written. For the JSOC AIA test file the codestream is byte-identical to
+`kdu_transcode` 7.7 output except for the `COM` marker, which keeps the
+input's comment. This works for single-tile codestreams in any progression
+order, without COC, RGN, POC, PPM or PPT markers or tile-part coding
+parameters, whose code-block style has neither selective arithmetic coding
+bypass nor termination on each coding pass, and whose code-block partition the
+new precincts leave unchanged (true for the 64×64 code-blocks of JSOC AIA
+files). SOP and EPH markers are dropped.
 
 ## JPX movies
 
