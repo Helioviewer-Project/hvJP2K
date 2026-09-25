@@ -267,8 +267,7 @@ the packet layer changes: the code-blocks keep their coding passes and bytes,
 and are regrouped into the new precincts under new packet headers. On the
 [test fixtures](hvJP2K/jp2/test/transcode/README.md), its output matches
 Kakadu's byte for byte, except for the `COM` marker, which keeps the input's
-comment. Installing compiles it with Cython; without the compiled extension,
-the same Python source runs, only more slowly.
+comment. Installation builds the required Cython packet extension.
 
 It accepts complete single-tile codestreams in any progression order, and
 stops with an error on:
@@ -416,10 +415,10 @@ export HVJP2K_PYTHON="/path/to/hvjp2k-venv/bin/python"
 ./hvJP2K/jpx/test/test
 ```
 
-**Editing `jp2_precincts.py`.** Installing compiles this module into an
-extension. An in-place build (`python setup.py build_ext --inplace`) puts the
-compiled module beside the source, and Python imports the compiled module
-first. Rebuild after each edit, or your changes are ignored.
+**Editing the transcoder.** Installing compiles `jp2_precincts.py` and
+`jp2_packets.pyx`. An in-place build (`python setup.py build_ext --inplace`)
+puts the compiled modules beside the source, and Python imports them first.
+Rebuild after editing either file.
 
 ## License
 

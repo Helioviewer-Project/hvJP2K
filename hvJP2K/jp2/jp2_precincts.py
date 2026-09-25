@@ -19,6 +19,14 @@ markers in the input are skipped and not written.
 """
 
 import struct
+from array import array
+
+try:
+    from . import jp2_packets as _packets
+except ImportError as exc:
+    raise ImportError(
+        "hvJP2K's Cython packet extension is unavailable; run `pip install .`"
+    ) from exc
 
 _SOC, _SIZ, _COD, _COC, _RGN, _POC = 0xFF4F, 0xFF51, 0xFF52, 0xFF53, 0xFF5E, 0xFF5F
 _TLM, _PLM, _PLT, _PPM, _COM = 0xFF55, 0xFF57, 0xFF58, 0xFF60, 0xFF64
@@ -29,223 +37,6 @@ _ORDERS = {"LRCP": 0, "RLCP": 1, "RPCL": 2, "PCRL": 3, "CPRL": 4}
 
 def _ceildiv(a, b):
     return -(-a // b)
-
-
-# ----------------------------------------------------------------------------
-# Bit I/O with JPEG 2000 packet-header bit stuffing
-
-
-class _BitReader:
-    __slots__ = ("data", "pos", "buf", "ct")
-
-    def __init__(self, data, pos):
-        self.data = data
-        self.pos = pos
-        self.buf = 0
-        self.ct = 0
-
-    def _fill(self):
-        # After 0xFF the next byte carries only 7 bits.
-        self.ct = 7 if self.buf == 0xFF else 8
-        if self.pos >= len(self.data):
-            raise ValueError(
-                "truncated input is not supported: incomplete packet header"
-            )
-        self.buf = self.data[self.pos]
-        self.pos += 1
-
-    def bit(self):
-        if self.ct == 0:
-            self._fill()
-        self.ct -= 1
-        return (self.buf >> self.ct) & 1
-
-    def bits(self, n):
-        value = 0
-        while n > 0:
-            if self.ct == 0:
-                self._fill()
-            take = min(n, self.ct)
-            self.ct -= take
-            value = (value << take) | ((self.buf >> self.ct) & ((1 << take) - 1))
-            n -= take
-        return value
-
-    def align(self):
-        """End of packet header: skip the stuffed byte after a final 0xFF."""
-        if self.buf == 0xFF:
-            self.pos += 1
-        self.ct = 0
-        self.buf = 0
-        return self.pos
-
-
-class _BitWriter:
-    __slots__ = ("out", "cur", "n", "cap")
-
-    def __init__(self):
-        self.out = bytearray()
-        self.cur = 0
-        self.n = 0
-        self.cap = 8
-
-    def _emit(self):
-        self.out.append(self.cur)
-        self.cap = 7 if self.cur == 0xFF else 8
-        self.cur = 0
-        self.n = 0
-
-    def bit(self, b):
-        self.cur = (self.cur << 1) | b
-        self.n += 1
-        if self.n == self.cap:
-            self._emit()
-
-    def bits(self, v, n):
-        while n > 0:
-            take = min(n, self.cap - self.n)
-            self.cur = (self.cur << take) | ((v >> (n - take)) & ((1 << take) - 1))
-            self.n += take
-            n -= take
-            if self.n == self.cap:
-                self._emit()
-
-    def flush(self):
-        if self.n:
-            self.out.append(self.cur << (self.cap - self.n))
-        # A packet header must not end with 0xFF.
-        if self.out and self.out[-1] == 0xFF:
-            self.out.append(0)
-        return bytes(self.out)
-
-
-# ----------------------------------------------------------------------------
-# Tag trees (B.10.2)
-
-
-class _TagTree:
-    __slots__ = ("value", "low", "known", "paths")
-
-    def __init__(self, w, h, values=None):
-        if w == h == 1:
-            self.paths = ((0,),)
-            self.low = [0]
-            self.known = [False]
-            if values is None:
-                self.value = [1 << 30]
-            else:
-                self.value = list(values)
-            return
-
-        start = 0
-        levels = []
-        while True:
-            levels.append((w, h))
-            if w * h == 1:
-                break
-            w, h = _ceildiv(w, 2), _ceildiv(h, 2)
-        offsets = []
-        for w, h in levels:
-            offsets.append(start)
-            start += w * h
-        parent = [-1] * start
-        for k in range(len(levels) - 1):
-            w, h = levels[k]
-            pw = levels[k + 1][0]
-            for y in range(h):
-                for x in range(w):
-                    parent[offsets[k] + y * w + x] = (
-                        offsets[k + 1] + (y >> 1) * pw + (x >> 1)
-                    )
-        leaves = levels[0][0] * levels[0][1]
-        paths = [()] * start
-        # Parent indices are larger, so build paths from the root down.
-        for n in range(start - 1, -1, -1):
-            p = parent[n]
-            paths[n] = paths[p] + (n,) if p >= 0 else (n,)
-        self.paths = paths[:leaves]
-        self.low = [0] * start
-        self.known = [False] * start
-        if values is None:
-            self.value = [1 << 30] * start
-        else:
-            v = list(values) + [1 << 30] * (start - leaves)
-            for k in range(start):
-                p = parent[k]
-                if p >= 0 and v[k] < v[p]:
-                    v[p] = v[k]
-            self.value = v
-
-    def decode(self, rd, leaf, threshold):
-        low = 0
-        value, lows = self.value, self.low
-        for n in self.paths[leaf]:
-            if low > lows[n]:
-                lows[n] = low
-            else:
-                low = lows[n]
-            while low < threshold and low < value[n]:
-                if rd.bit():
-                    value[n] = low
-                else:
-                    low += 1
-            lows[n] = low
-        return value[leaf] < threshold
-
-    def encode(self, wr, leaf, threshold):
-        low = 0
-        value, lows, known = self.value, self.low, self.known
-        for n in self.paths[leaf]:
-            if low > lows[n]:
-                lows[n] = low
-            else:
-                low = lows[n]
-            while low < threshold:
-                if low >= value[n]:
-                    if not known[n]:
-                        wr.bit(1)
-                        known[n] = True
-                    break
-                wr.bit(0)
-                low += 1
-            lows[n] = low
-
-
-# ----------------------------------------------------------------------------
-# Coding-pass count code words (Table B.4) and Lblock
-
-
-def _read_npasses(rd):
-    if not rd.bit():
-        return 1
-    if not rd.bit():
-        return 2
-    n = rd.bits(2)
-    if n != 3:
-        return 3 + n
-    n = rd.bits(5)
-    if n != 31:
-        return 6 + n
-    return 37 + rd.bits(7)
-
-
-def _write_npasses(wr, n):
-    if n == 1:
-        wr.bit(0)
-    elif n == 2:
-        wr.bits(0b10, 2)
-    elif n <= 5:
-        wr.bits(0b1100 | (n - 3), 4)
-    elif n <= 36:
-        wr.bits(0b111100000 | (n - 6), 9)
-    elif n <= 164:
-        wr.bits((0b111111111 << 7) | (n - 37), 16)
-    else:
-        raise ValueError("too many coding passes: {0}".format(n))
-
-
-def _floorlog2(n):
-    return n.bit_length() - 1
 
 
 # ----------------------------------------------------------------------------
@@ -495,157 +286,83 @@ def _packet_order(cs, geom, order):
 
 
 # ----------------------------------------------------------------------------
-# Tier-2 decode / encode
+# Packet layout for the compiled Tier-2 engine
 
 
-class _Block:
-    __slots__ = ("zbp", "lblock", "incl", "layers")
-
-    def __init__(self, nlayers):
-        self.zbp = None
-        self.lblock = 3
-        self.incl = None  # first layer with a contribution
-        self.layers = [None] * nlayers  # (npasses, bytes) or None
-
-
-def _read_packets(cs, blocks):
-    prc: _Precinct
-    blk: _Block
-    rd: _BitReader
-    inclt: _TagTree
-    zbpt: _TagTree
-    geom = _geometry(cs, cs.precincts)
-    for plist in geom.values():
-        for prc in plist:
-            for _, _, ids in prc.bands:
-                for key in ids:
-                    blocks[key] = _Block(cs.layers)
-    trees = {}
-    data = cs.body
-    ends = cs.tile_part_ends
-    pos = 0
-    part = 0
-    sop, eph = cs.scod & 2, cs.scod & 4
-    for prc, l in _packet_order(cs, geom, cs.order):
-        # For Psot=0, another SOT can only be identified at a packet boundary.
-        if cs.zero_psot and data[pos : pos + 2] == b"\xff\x90":
-            raise ValueError("Psot=0 is only valid for the last tile-part")
-        # Empty tile-parts share an end offset with the preceding part.
-        while part < len(ends) and pos == ends[part]:
-            part += 1
-        if part == len(ends):
-            raise ValueError("truncated input is not supported: missing packets")
-        if sop and data[pos : pos + 2] == b"\xff\x91":
-            pos += 6
-        t = trees.get(id(prc))
-        if t is None:
-            t = [
-                (_TagTree(w, h), _TagTree(w, h)) if ids else None
-                for w, h, ids in prc.bands
-            ]
-            trees[id(prc)] = t
-        rd = _BitReader(data, pos)
-        contrib = []
-        if rd.bit():
-            for (_, _, ids), tt in zip(prc.bands, t):
-                if not ids:
-                    continue
-                inclt, zbpt = tt
-                for leaf, key in enumerate(ids):
-                    blk = blocks[key]
-                    if blk.incl is None:
-                        if not inclt.decode(rd, leaf, l + 1):
-                            continue
-                        zbpt.decode(rd, leaf, 1 << 30)
-                        blk.zbp = zbpt.value[leaf]
-                        blk.incl = l
-                    elif not rd.bit():
-                        continue
-                    n = _read_npasses(rd)
-                    while rd.bit():
-                        blk.lblock += 1
-                    length = rd.bits(blk.lblock + _floorlog2(n))
-                    contrib.append((blk, n, length))
-        pos = rd.align()
-        if eph and data[pos : pos + 2] == b"\xff\x92":
-            pos += 2
-        for blk, n, length in contrib:
-            blk.layers[l] = (n, data[pos : pos + length])
-            pos += length
-        if pos > len(data):
-            raise ValueError(
-                "truncated input is not supported: packet data overruns the tile"
-            )
-        if pos > ends[part]:
-            raise ValueError("packet crosses a tile-part boundary")
-    if pos != len(data):
-        if cs.zero_psot and data[pos : pos + 2] == b"\xff\x90":
-            raise ValueError("Psot=0 is only valid for the last tile-part")
-        raise ValueError("{0} unparsed tile bytes".format(len(data) - pos))
-
-
-def _write_packets(cs, blocks, precincts):
-    prc: _Precinct
-    blk: _Block
-    wr: _BitWriter
-    inclt: _TagTree
-    zbpt: _TagTree
-    geom = _geometry(cs, precincts)
-    state = {}
-    packets = []
-    for prc, l in _packet_order(cs, geom, _ORDERS["RPCL"]):
-        st = state.get(id(prc))
-        if st is None:
-            st = []
+def _flatten(geom, order, index, precincts):
+    """Flat int32 arrays describing geom and order for jp2_packets."""
+    band_w, band_h, band_start, blk_ids, prc_band_start = [], [], [0], [], [0]
+    prc_index = {}
+    for key in sorted(geom):
+        for prc in geom[key]:
+            prc_index[id(prc)] = len(prc_band_start) - 1
             for w, h, ids in prc.bands:
-                if not ids:
-                    st.append(None)
-                    continue
+                band_w.append(w)
+                band_h.append(h)
                 try:
-                    bl = [blocks[k] for k in ids]
+                    blk_ids.extend([index[k] for k in ids])
                 except KeyError:
                     raise ValueError(
                         "{0}x{1} precincts change the code-block partition".format(
                             1 << precincts[prc.r][0], 1 << precincts[prc.r][1]
                         )
                     ) from None
-                inc = [b.incl if b.incl is not None else cs.layers for b in bl]
-                zbp = [b.zbp if b.zbp is not None else 0 for b in bl]
-                st.append((bl, _TagTree(w, h, inc), _TagTree(w, h, zbp), [3] * len(bl)))
-            state[id(prc)] = st
-        wr = _BitWriter()
-        body = []
-        # Like Kakadu, never use the one-bit empty packet; always write the
-        # inclusion bits, even when no code-block contributes.
-        wr.bit(1)
-        for s in st:
-            if s is None:
-                continue
-            bl, inclt, zbpt, lblock = s
-            for leaf, blk in enumerate(bl):
-                c = blk.layers[l]
-                if blk.incl is None or blk.incl > l:
-                    inclt.encode(wr, leaf, l + 1)
-                    continue
-                if blk.incl == l:
-                    inclt.encode(wr, leaf, l + 1)
-                    zbpt.encode(wr, leaf, 1 << 30)
-                else:
-                    wr.bit(1 if c is not None else 0)
-                if c is None:
-                    continue
-                n, seg = c
-                _write_npasses(wr, n)
-                log_n = _floorlog2(n)
-                need = len(seg).bit_length() - log_n
-                inc = max(0, need - lblock[leaf])
-                # Unary Lblock increment: inc one bits followed by a zero.
-                wr.bits(((1 << inc) - 1) << 1, inc + 1)
-                lblock[leaf] += inc
-                wr.bits(len(seg), lblock[leaf] + log_n)
-                body.append(seg)
-        packets.append(wr.flush() + b"".join(body))
-    return packets
+                band_start.append(len(blk_ids))
+            prc_band_start.append(len(band_w))
+    order_prc = [prc_index[id(prc)] for prc, _ in order]
+    order_layer = [l for _, l in order]
+    return tuple(
+        [
+            array("i", a)
+            for a in (
+                band_w,
+                band_h,
+                band_start,
+                blk_ids,
+                prc_band_start,
+                order_prc,
+                order_layer,
+            )
+        ]
+    )
+
+
+def _transcode_packets(cs, precincts):
+    """Decode and repackage packets with the compiled Tier-2 engine."""
+    geom = _geometry(cs, cs.precincts)
+    index = {}
+    for key in sorted(geom):
+        for prc in geom[key]:
+            for _, _, ids in prc.bands:
+                for k in ids:
+                    index[k] = len(index)
+    nblocks, nlayers = len(index), cs.layers
+    zbp = array("i", [-1]) * nblocks
+    incl = array("i", [-1]) * nblocks
+    npasses = array("i", [0]) * (nblocks * nlayers)
+    offset = array("q", [0]) * (nblocks * nlayers)
+    length = array("q", [0]) * (nblocks * nlayers)
+    _packets.read_packets(
+        cs.body,
+        array("q", cs.tile_part_ends),
+        cs.zero_psot,
+        bool(cs.scod & 2),
+        bool(cs.scod & 4),
+        nlayers,
+        *_flatten(geom, _packet_order(cs, geom, cs.order), index, cs.precincts),
+        zbp,
+        incl,
+        npasses,
+        offset,
+        length,
+    )
+    geom = _geometry(cs, precincts)
+    tables = _flatten(geom, _packet_order(cs, geom, _ORDERS["RPCL"]), index, precincts)
+    lengths = array("q", [0]) * len(tables[-1])
+    data = _packets.write_packets(
+        cs.body, nlayers, *tables, zbp, incl, npasses, offset, length, lengths
+    )
+    return data, lengths
 
 
 # ----------------------------------------------------------------------------
@@ -660,6 +377,12 @@ def _plt_segments(lengths):
     segs = []
     cur = bytearray()
     for n in lengths:
+        if n < 0x80:
+            if len(cur) == 65535 - 3:
+                segs.append(bytes(cur))
+                cur = bytearray()
+            cur.append(n)
+            continue
         enc = [n & 0x7F]
         n >>= 7
         while n:
@@ -687,9 +410,7 @@ def transcode_codestream(cs_bytes, cprecincts=(128, 128), comment=None):
         raise ValueError("precinct dimensions must be powers of 2")
     precincts = [(ex, ey)] * (cs.levels + 1)
 
-    blocks = {}
-    _read_packets(cs, blocks)
-    packets = _write_packets(cs, blocks, precincts)
+    data, lengths = _transcode_packets(cs, precincts)
 
     out = bytearray(struct.pack(">H", _SOC))
     com_done = False
@@ -717,8 +438,7 @@ def transcode_codestream(cs_bytes, cprecincts=(128, 128), comment=None):
         text = comment.encode("latin-1") if isinstance(comment, str) else comment
         out += _marker(_COM, b"\x00\x01" + text)
 
-    plt = b"".join(_plt_segments(map(len, packets)))
-    data = b"".join(packets)
+    plt = b"".join(_plt_segments(lengths))
     psot = 12 + len(plt) + 2 + len(data)
     out += struct.pack(">HHHIBB", _SOT, 10, 0, psot, 0, 1)
     out += plt

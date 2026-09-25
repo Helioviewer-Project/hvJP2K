@@ -1,21 +1,13 @@
-"""Exercise packet accounting with the bundled Kakadu AIA codestream."""
+"""Exercise packet accounting and corrupted inputs."""
 
-import importlib.util
+import random
 import struct
 import sys
 from pathlib import Path
 
-from hvJP2K.jp2 import jp2_precincts
-from hvJP2K.jp2.jp2_precincts import _BitReader, _BitWriter, transcode_codestream
+from hvJP2K.jp2.jp2_precincts import transcode_codestream
 
 from compare import boxes
-
-source_path = Path(jp2_precincts.__file__).with_name("jp2_precincts.py")
-source_spec = importlib.util.spec_from_file_location(
-    "jp2_precincts_source", source_path
-)
-source = importlib.util.module_from_spec(source_spec)
-source_spec.loader.exec_module(source)
 
 
 def tile_part(index, total, data, tile=0):
@@ -41,34 +33,12 @@ def rejects(data, reason):
         raise AssertionError("invalid codestream was accepted: " + reason)
 
 
-wr = _BitWriter()
-for _ in range(8):
-    wr.bit(1)
-wr.bits(0x7F, 7)
-wr.bits(0xFFFF, 16)
-wr.bit(0)
-wr.bits(0x3F, 6)
-wr.bits(0xFF, 8)
-header = wr.flush()
-matches(header, b"\xff\x7f\xff\x7f\xbf\xff\x00", "packet-header stuffing differs")
-rd = _BitReader(header, 0)
-for _ in range(8):
-    matches(rd.bit(), 1, "packet-header bit differs")
-for n, value in ((7, 0x7F), (16, 0xFFFF)):
-    matches(rd.bits(n), value, "packet-header bits differ")
-matches(rd.bit(), 0, "packet-header bit differs")
-for n, value in ((6, 0x3F), (8, 0xFF)):
-    matches(rd.bits(n), value, "packet-header bits differ")
-matches(rd.align(), len(header), "stuffed end byte was not consumed")
-
-wide_header = b"\x7f" * 20
-wide_value = int.from_bytes(wide_header[:9], "big") >> 2
-for module in (jp2_precincts, source):
-    matches(
-        module._BitReader(wide_header, 0).bits(70),
-        wide_value,
-        "70-bit packet-header read differs from Python integer arithmetic",
-    )
+def with_tile(codestream, tile):
+    sot = codestream.index(b"\xff\x90")
+    sod = codestream.index(b"\xff\x93", sot) + 2
+    out = bytearray(codestream[:sod] + tile + b"\xff\xd9")
+    out[sot + 6 : sot + 10] = (len(out) - 2 - sot).to_bytes(4, "big")
+    return bytes(out)
 
 
 cs = next(
@@ -153,27 +123,58 @@ rejects(
     main + zero_first + tile_part(1, 2, body[first_packet:]) + b"\xff\xd9",
     "Psot=0 is only valid for the last tile-part",
 )
-fixture_dir = Path(__file__).resolve().parent
-fixtures = sorted(
-    list(fixture_dir.glob("orig/*.jp2"))
-    + list(fixture_dir.glob("trans/*.jp2"))
-    + list(fixture_dir.glob("sop_eph/*.jp2"))
-    + list(fixture_dir.glob("sop_eph/trans/*.jp2"))
-    + list((fixture_dir.parents[2] / "jpx/test").glob("*-ref/*.jp2"))
+# A run of 0xFF raises Lblock past 62 bits. The packet reader must report
+# the overrun without wrapping the length around.
+origin = (
+    Path(__file__).resolve().parent / "orig/synthetic_rgb_129x129_origin129_CPRL.jp2"
 )
-print("pass: packet-header stuffing and tile-part integrity")
-if Path(jp2_precincts.__file__).resolve() == source_path.resolve():
-    print("skip: source and active transcode are the same Python file")
-else:
-    for path in fixtures:
-        codestream = next(
-            data for box_id, data in boxes(path.read_bytes()) if box_id == b"jp2c"
-        )
-        matches(
-            source.transcode_codestream(codestream),
-            transcode_codestream(codestream),
-            "compiled and source output differ for " + str(path),
-        )
-    print(
-        "pass: source and active transcode agree on {0} JP2 files".format(len(fixtures))
+rgb = next(data for box_id, data in boxes(origin.read_bytes()) if box_id == b"jp2c")
+sot = rgb.index(b"\xff\x90")
+sod = rgb.index(b"\xff\x93", sot) + 2
+tile = rgb[sod:-2]
+rejects(
+    with_tile(rgb, tile[:2917] + b"\xff" * 11 + tile[2932:]),
+    "packet data overruns the tile",
+)
+print("pass: packet-header and tile-part integrity")
+
+fixture_dir = Path(__file__).resolve().parent
+small = [
+    next(data for box_id, data in boxes(path.read_bytes()) if box_id == b"jp2c")
+    for path in (
+        fixture_dir / "orig/solo_fsi174_127x129_RLCP_PLT.jp2",
+        origin,
+        fixture_dir / "sop_eph/synthetic_rgb_129x129_CPRL_SOP_EPH.jp2",
     )
+]
+rng = random.Random(0)
+rejected = accepted = 0
+for _ in range(2000):
+    original = rng.choice(small)
+    sot = original.index(b"\xff\x90")
+    sod = original.index(b"\xff\x93", sot) + 2
+    tile = bytearray(original[sod:-2])
+    kind, at = rng.randrange(4), rng.randrange(len(tile) - 16)
+    if kind == 0:
+        for _ in range(rng.randint(1, 8)):
+            tile[rng.randrange(len(tile))] = rng.randrange(256)
+    elif kind == 1:
+        del tile[at:]
+    elif kind == 2:
+        tile[at : at + rng.randint(1, 16)] = bytes(
+            [rng.choice(b"\xff\x00\x7f\x80")]
+        ) * rng.randint(1, 16)
+    else:
+        tile[at:at] = bytes(rng.randrange(256) for _ in range(rng.randint(1, 32)))
+    try:
+        once = transcode_codestream(with_tile(original, tile))
+    except ValueError:
+        rejected += 1
+    else:
+        accepted += 1
+        matches(transcode_codestream(once), once, "corrupted input is not stable")
+if not (accepted and rejected):
+    raise AssertionError("corruption test did not exercise both outcomes")
+print(
+    "pass: {0} rejected and {1} stable corrupted codestreams".format(rejected, accepted)
+)

@@ -5,7 +5,6 @@ import tempfile
 import glymur
 
 from .jp2_common import first_box
-from .jp2_precincts import transcode_codestream
 
 
 def _codestream(filepath, box):
@@ -30,6 +29,9 @@ def jp2_transcode(
     jp2_cs = first_box(jp2.box, "jp2c")
     if jp2_cs is None:
         raise ValueError("no JP2 codestream box: " + filepath)
+
+    if not kdu_transcode:
+        from .jp2_precincts import transcode_codestream
 
     fd, tmp = tempfile.mkstemp(suffix=".j2c")
     try:
