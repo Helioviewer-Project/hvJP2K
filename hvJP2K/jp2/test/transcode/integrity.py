@@ -138,6 +138,60 @@ rejects(
 )
 print("pass: packet-header and tile-part integrity")
 
+
+def header_field(offset, value):
+    damaged = bytearray(rgb)
+    damaged[offset : offset + len(value)] = value
+    return bytes(damaged)
+
+
+siz = 2
+cod = siz + 2 + struct.unpack_from(">H", rgb, siz + 2)[0]
+rejects(b"", "not a JPEG 2000 codestream")
+rejects(rgb[:4], "truncated main header marker")
+rejects(rgb[:2] + rgb[cod:], "SIZ marker must follow SOC")
+rejects(rgb[:cod] + rgb[sot:], "no COD marker")
+rejects(rgb[:cod] + rgb[siz:cod] + rgb[cod:], "duplicate SIZ marker")
+rejects(rgb[:sot] + rgb[cod:sot] + rgb[sot:], "duplicate COD marker")
+rejects(header_field(siz + 2, b"\x00\x02"), "invalid SIZ marker length")
+rejects(header_field(siz + 2, b"\xff\xff"), "invalid main header marker length")
+rejects(header_field(siz + 4 + 34, b"\x00\x00"), "invalid SIZ component count")
+rejects(header_field(siz + 4 + 34, b"\x00\x04"), "invalid SIZ component count")
+rejects(header_field(siz + 4 + 10, (258).to_bytes(4, "big")), "invalid SIZ image")
+rejects(header_field(siz + 4 + 18, b"\x00" * 4), "invalid SIZ tile size")
+rejects(header_field(siz + 4 + 37, b"\x00"), "invalid SIZ component subsampling")
+empty_component = bytearray(rgb)
+# Large subsampling leaves these components empty at coarse resolutions.
+empty_component[siz + 4 + 40] = 174  # component 1 XRsiz
+empty_component[siz + 4 + 44] = 255  # component 2 YRsiz
+rejects(bytes(empty_component), "unparsed tile bytes")
+rejects(header_field(cod + 2, b"\x00\x00"), "invalid main header marker length")
+short_cod = bytearray(rgb)
+cod_length = struct.unpack_from(">H", short_cod, cod + 2)[0]
+del short_cod[cod + cod_length + 1]
+short_cod[cod + 2 : cod + 4] = (cod_length - 1).to_bytes(2, "big")
+rejects(bytes(short_cod), "invalid COD marker length")
+rejects(header_field(cod + 4, b"\x08"), "invalid COD style flags")
+rejects(header_field(cod + 4 + 1, b"\x05"), "invalid COD progression")
+rejects(header_field(cod + 4 + 2, b"\x00\x00"), "invalid COD progression")
+rejects(header_field(cod + 4 + 5, b"\x42"), "invalid COD decomposition")
+rejects(header_field(cod + 4 + 6, b"\x09"), "invalid COD code-block")
+rejects(header_field(cod + 4 + 7, b"\x05"), "invalid COD code-block")
+rejects(header_field(cod + 4 + 11, b"\x08"), "zero COD precinct exponent")
+huge = bytearray(rgb)
+huge[siz + 4 + 2 : siz + 4 + 6] = (0x7FFFFFFF).to_bytes(4, "big")
+huge[siz + 4 + 18 : siz + 4 + 22] = (0x7FFFFFFF).to_bytes(4, "big")
+huge[cod + 4 + 2 : cod + 4 + 4] = (60164).to_bytes(2, "big")
+rejects(bytes(huge), "packet count exceeds tile data")
+sparse = bytearray(rgb)
+for offset in (2, 6, 18, 22):
+    sparse[siz + 4 + offset : siz + 8 + offset] = (65536).to_bytes(4, "big")
+sparse[cod + 4 + 10 : cod + 4 + 13] = b"\xff" * 3
+rejects(bytes(sparse), "code-block count exceeds supported limit")
+sparse[cod + 4 + 2 : cod + 4 + 4] = (200).to_bytes(2, "big")
+rejects(bytes(sparse), "code-block layer count exceeds supported limit")
+print("pass: malformed SIZ and COD headers")
+
 fixture_dir = Path(__file__).resolve().parent
 small = [
     next(data for box_id, data in boxes(path.read_bytes()) if box_id == b"jp2c")

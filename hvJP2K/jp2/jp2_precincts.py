@@ -33,6 +33,9 @@ _TLM, _PLM, _PLT, _PPM, _COM = 0xFF55, 0xFF57, 0xFF58, 0xFF60, 0xFF64
 _SOT, _SOD, _EOC = 0xFF90, 0xFF93, 0xFFD9
 
 _ORDERS = {"LRCP": 0, "RLCP": 1, "RPCL": 2, "PCRL": 3, "CPRL": 4}
+# Limit geometry and the code-block-by-layer arrays for one transcode.
+_MAX_CODE_BLOCKS = 250_000
+_MAX_BLOCK_LAYER_ENTRIES = 2_000_000
 
 
 def _ceildiv(a, b):
@@ -45,22 +48,34 @@ def _ceildiv(a, b):
 
 class _Codestream:
     def __init__(self, cs):
-        if struct.unpack(">H", cs[:2])[0] != _SOC:
+        if cs[:2] != b"\xff\x4f":
             raise ValueError("not a JPEG 2000 codestream")
+        if cs[2:4] != b"\xff\x51":
+            raise ValueError("SIZ marker must follow SOC")
         self.main = []  # (marker, body) in file order, SOC excluded
         self.cod = None
         pos = 2
         while True:
+            if pos + 2 > len(cs):
+                raise ValueError("missing SOT marker")
             m = struct.unpack(">H", cs[pos : pos + 2])[0]
             if m == _SOT:
                 break
+            if pos + 4 > len(cs):
+                raise ValueError("truncated main header marker")
             L = struct.unpack(">H", cs[pos + 2 : pos + 4])[0]
+            if L < 2 or pos + 2 + L > len(cs):
+                raise ValueError("invalid main header marker length")
             body = cs[pos + 4 : pos + 2 + L]
             if m in (_COC, _POC, _PPM, _RGN):
                 raise ValueError("unsupported main header marker 0x{0:04X}".format(m))
             if m == _COD:
+                if self.cod is not None:
+                    raise ValueError("duplicate COD marker")
                 self.cod = body
             if m == _SIZ:
+                if pos != 2:
+                    raise ValueError("duplicate SIZ marker")
                 self._siz(body)
             self.main.append((m, body))
             pos += 2 + L
@@ -140,19 +155,52 @@ class _Codestream:
         self.body = bytes(body)
 
     def _siz(self, b):
+        if len(b) < 36:
+            raise ValueError("invalid SIZ marker length")
         _, self.X, self.Y, self.XO, self.YO, self.XT, self.YT, self.XTO, self.YTO, C = (
             struct.unpack(">HIIIIIIIIH", b[:36])
         )
-        self.comps = [(b[36 + 3 * i + 1], b[36 + 3 * i + 2]) for i in range(C)]
+        if not 1 <= C <= 16384 or len(b) != 36 + 3 * C:
+            raise ValueError("invalid SIZ component count or marker length")
+        if not (self.XTO <= self.XO < self.X and self.YTO <= self.YO < self.Y):
+            raise ValueError("invalid SIZ image or tile origin")
+        if not (
+            self.XT > 0
+            and self.YT > 0
+            and self.XTO + self.XT > self.XO
+            and self.YTO + self.YT > self.YO
+        ):
+            raise ValueError("invalid SIZ tile size")
+        self.comps = []
+        for i in range(C):
+            xr, yr = b[37 + 3 * i], b[38 + 3 * i]
+            if xr == 0 or yr == 0:
+                raise ValueError("invalid SIZ component subsampling")
+            self.comps.append((xr, yr))
 
     def _parse_cod(self, b):
+        if len(b) < 10:
+            raise ValueError("invalid COD marker length")
         self.scod = b[0]
         self.order, self.layers, self.mct = struct.unpack(">BHB", b[1:5])
         self.levels, cbw, cbh, self.cbstyle, self.xform = b[5:10]
+        if self.scod & ~7:
+            raise ValueError("invalid COD style flags")
+        if self.order not in _ORDERS.values() or self.layers == 0:
+            raise ValueError("invalid COD progression order or layer count")
+        if self.levels > 32:
+            raise ValueError("invalid COD decomposition level count")
+        if len(b) != 10 + (self.levels + 1 if self.scod & 1 else 0):
+            raise ValueError("invalid COD marker length")
+        if cbw > 8 or cbh > 8 or cbw + cbh > 8:
+            raise ValueError("invalid COD code-block dimensions")
         self.cbw, self.cbh = cbw + 2, cbh + 2
         if self.scod & 1:
             pp = b[10 : 10 + self.levels + 1]
             self.precincts = [(v & 15, v >> 4) for v in pp]
+            for px, py in self.precincts[1:]:
+                if px == 0 or py == 0:
+                    raise ValueError("zero COD precinct exponent outside LL")
         else:
             self.precincts = [(15, 15)] * (self.levels + 1)
         if self.cbstyle & 0x05:
@@ -173,7 +221,7 @@ class _Precinct:
         self.bands = []  # (grid_w, grid_h, [cblk ids in raster order])
 
 
-def _geometry(cs, precincts):
+def _geometry(cs, precincts, packet_limit=None):
     """Precincts per (component, resolution) for the given precinct exponents.
 
     Code-blocks are identified by (component, resolution, band, x, y, width
@@ -184,6 +232,8 @@ def _geometry(cs, precincts):
     tx1, ty1 = min(cs.XTO + cs.XT, cs.X), min(cs.YTO + cs.YT, cs.Y)
     NL = cs.levels
     out = {}
+    packet_count = 0
+    block_count = 0
     for c, (xr, yr) in enumerate(cs.comps):
         cx0, cy0, cx1, cy1 = (
             _ceildiv(tx0, xr),
@@ -223,8 +273,27 @@ def _geometry(cs, precincts):
             if rx1 > rx0 and ry1 > ry0:
                 npx0, npy0 = rx0 >> PPx, ry0 >> PPy
                 npx1, npy1 = _ceildiv(rx1, 1 << PPx), _ceildiv(ry1, 1 << PPy)
+                if packet_limit is not None:
+                    # Even an empty packet consumes at least one tile byte.
+                    packet_count += (npx1 - npx0) * (npy1 - npy0) * cs.layers
+                    if packet_count > packet_limit:
+                        raise ValueError("packet count exceeds tile data")
+                # The block grid aligns with the precinct grid, so each band
+                # can be counted before constructing any of its block IDs.
+                for _, bx0, by0, bx1, by1 in bgeom:
+                    if bx1 > bx0 and by1 > by0:
+                        nx = _ceildiv(bx1, 1 << xcb) - (bx0 >> xcb)
+                        ny = _ceildiv(by1, 1 << ycb) - (by0 >> ycb)
+                        block_count += nx * ny
+                        if block_count > _MAX_CODE_BLOCKS:
+                            raise ValueError("code-block count exceeds supported limit")
+                        if block_count * cs.layers > _MAX_BLOCK_LAYER_ENTRIES:
+                            raise ValueError(
+                                "code-block layer count exceeds supported limit"
+                            )
             else:
-                npx0 = npy0 = npx1 = npy1 = 0
+                # Cython 3.3.0 compiles a chained assignment here as NULL values.
+                npx0, npy0, npx1, npy1 = 0, 0, 0, 0
             plist = []
             for py in range(npy0, npy1):
                 for px in range(npx0, npx1):
@@ -329,7 +398,7 @@ def _flatten(geom, order, index, precincts):
 
 def _transcode_packets(cs, precincts):
     """Decode and repackage packets with the compiled Tier-2 engine."""
-    geom = _geometry(cs, cs.precincts)
+    geom = _geometry(cs, cs.precincts, len(cs.body))
     index = {}
     for key in sorted(geom):
         for prc in geom[key]:
