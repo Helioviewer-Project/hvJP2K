@@ -17,6 +17,22 @@ else
 fi
 python=${HVJP2K_PYTHON:-python3}
 
+printf '%s\n' '<html><title>503 Service Unavailable</title></html>' > "$work_dir/http-error.jp2"
+: > "$work_dir/empty.jp2"
+printf '\000\000\000\014jP  ' > "$work_dir/truncated.jp2"
+for name in http-error empty truncated; do
+    input="$work_dir/$name.jp2"
+    # Non-JP2 input must fail before attempting to load this missing schema.
+    if "$verify" -v -i "$input" -schema "$work_dir/missing.sch" \
+        > "$work_dir/verify.stdout" 2> "$work_dir/verify.stderr"; then
+        echo "verifier accepted non-JP2 input: $input" >&2
+        exit 1
+    fi
+    test ! -s "$work_dir/verify.stdout"
+    test "$(cat "$work_dir/verify.stderr")" = "$input: not a JP2 file (invalid signature)"
+done
+echo "pass: reject non-JP2 inputs"
+
 "$python" "$test_dir/encode.py" "$encode" "$verify"
 
 name=2010_04_01__00_00_28__PROBA2_SWAP_SWAP_174

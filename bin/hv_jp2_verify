@@ -30,6 +30,17 @@ parser.add_argument(
 parser.add_argument("-v", "--verbose", help="verbose operation", action="store_true")
 args = parser.parse_args()
 
+try:
+    with open(args.i, "rb") as f:
+        signature = f.read(12)
+except OSError as exc:
+    print(f"{args.i}: cannot read file: {exc.strerror}", file=sys.stderr)
+    sys.exit(1)
+
+if signature != b"\x00\x00\x00\x0cjP  \r\n\x87\n":
+    print(f"{args.i}: not a JP2 file (invalid signature)", file=sys.stderr)
+    sys.exit(1)
+
 if args.nullxml:
     bv.BoxValidator.validate_xmlBox = validate_null_terminated_xml_box
 
