@@ -6,7 +6,6 @@ from pathlib import Path
 
 import numpy as np
 from astropy.io import fits
-from astropy.time import Time
 from astropy.utils.exceptions import AstropyUserWarning
 
 from hvJP2K.jp2.jp2_common import MAX_THREADS
@@ -48,6 +47,8 @@ def corrected_header(header, args):
 def output_path(input_path, header, args):
     directory = Path(args.out_dir) if args.out_dir else Path()
     if args.out_dateobs_dir:
+        from astropy.time import Time
+
         if "DATE-OBS" not in header:
             raise ValueError("DATE-OBS is required for --out-dateobs-dir")
         observed = Time(header["DATE-OBS"]).to_datetime()
